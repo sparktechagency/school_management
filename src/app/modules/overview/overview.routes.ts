@@ -11,6 +11,7 @@ router
     auth(USER_ROLE.teacher),
     OverviewController.getTeacherHomePageOverview,
   )
+  
   .get(
     '/daily_weekly_monthly_attendance_rate',
     auth(USER_ROLE.teacher),

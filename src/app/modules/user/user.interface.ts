@@ -12,6 +12,7 @@ export type TRole =
   | 'schoolAdmin';
 
 export type TStatus = 'active' | 'blocked';
+
 export type TGender = 'male' | 'female' | 'other';
 
 export type TUser = {

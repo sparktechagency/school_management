@@ -35,6 +35,7 @@ interface CreateUserPayload<T> {
 export async function createUserWithProfile<T>(
   payload: CreateUserPayload<T & { name?: string }>,
 ): Promise<mongoose.Document> {
+
   let uniquePhoneNumber;
 
   if (payload.phoneNumber) {
@@ -69,6 +70,7 @@ export async function createUserWithProfile<T>(
     if (!Model) throw new Error('Invalid role provided');
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const ModelAsAny = Model as any; // Temporary workaround
+
     const [newProfile] = await ModelAsAny.create(
       [
         {
@@ -78,6 +80,7 @@ export async function createUserWithProfile<T>(
       ],
       { session },
     );
+    
     if (!newProfile) throw new Error(`${payload.role} not created`);
 
     const userIdField = `${payload.role}Id`;

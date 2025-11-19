@@ -56,6 +56,7 @@ const sendSMS = async (payload: { phoneNumber: string; message: string }) => {
 
     console.log('SMS sent successfully:', response.data);
     return response.data;
+    
   } catch (error: any) {
     console.error('SMS sending failed:', error.response?.data || error.message);
     throw new AppError(httpStatus.BAD_REQUEST, error);

@@ -62,7 +62,7 @@ export const userSchema = new mongoose.Schema<TUser, UserModel>(
         USER_ROLE.student,
       ],
       default: USER_ROLE.student,
-    },
+    }, 
     status: {
       type: String,
       enum: [USER_STATUS.active, USER_STATUS.blocked],

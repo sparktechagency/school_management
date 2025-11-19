@@ -12,6 +12,7 @@ const sendOTP = async (
   purpose?: string,
   otp?: number,
 ) => {
+  
   const expiredAt = new Date();
   expiredAt.setMinutes(expiredAt.getMinutes() + otpExpiryTime!);
 

@@ -1,6 +1,7 @@
 import User from '../modules/user/user.model';
 
 async function generateUID(payload: { className: string; section: string }) {
+  
   try {
     const className = payload?.className;
     const section = payload?.section;

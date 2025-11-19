@@ -5,6 +5,7 @@ import { OverviewService } from './overview.service';
 
 const OverviewController = {
   getTeacherHomePageOverview: catchAsync(async (req, res) => {
+
     const result = await OverviewService.getTeacherHomePageOverview(
       req.user as TAuthUser,
     );
@@ -15,6 +16,7 @@ const OverviewController = {
       message: 'Teacher home page overview retrieved successfully',
       data: result,
     });
+
   }),
 
   getDailyWeeklyMonthlyAttendanceRate: catchAsync(async (req, res) => {
@@ -31,6 +33,7 @@ const OverviewController = {
   }),
 
   getAssignmentCount: catchAsync(async (req, res) => {
+    
     const result = await OverviewService.getAssignmentCount(
       req.user as TAuthUser,
     );
@@ -41,6 +44,7 @@ const OverviewController = {
       message: 'Assignment count retrieved successfully',
       data: result,
     });
+
   }),
 
   getStudentAttendance: catchAsync(async (req, res) => {
