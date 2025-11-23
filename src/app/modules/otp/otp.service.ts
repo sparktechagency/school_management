@@ -26,7 +26,7 @@ Please do not share this code with anyone.`;
       message,
     };
 
-    await sendSMS(emailBody);
+    // await sendSMS(emailBody);
   }
 
   const findExistingOtp = await OTP.findOne({

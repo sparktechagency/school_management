@@ -8,15 +8,48 @@ import ClassSchedule from '../classSchedule/classSchedule.model';
 import Result from '../result/result.model';
 import { StudentService } from '../student/student.service';
 import { TeacherService } from '../teacher/teacher.service';
-import { calculateAttendanceRate, getAttendanceRate } from './overview.helper';
+import { calculateAttendanceRate, getAttendanceRate, getAttendanceRateByClassIdAndSection } from './overview.helper';
+import Exam from '../exam/exam.model';
+import { ClassSectionSupervisor } from '../classSectionSuperVisor/classSectionSupervisor.model';
+import Student from '../student/student.model';
+import { ClassSectionSupervisorService } from '../classSectionSuperVisor/classSectionSupervisor.service';
 
 const getTeacherHomePageOverview = async (user: TAuthUser) => {
   const day = new Date()
     .toLocaleString('en-US', { weekday: 'long' })
     .toLowerCase();
 
-  const [todaysClass, todaysAttendanceRate, assignmentDue] = await Promise.all([
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+
+ // Get classes where this teacher is supervisor
+  const supervisorClasses = await ClassSectionSupervisorService.getMySupervisorsClasses(user.teacherId);
+
+  // Prepare filters for student counting
+  const classFilters = supervisorClasses.map((cls: any) => ({
+    classId: cls.classId,
+    section: cls.section,
+  }));
+
+  const studentMatchFilter =
+    classFilters.length > 0 ? { $or: classFilters } : { _id: null };
+
+  // Summoned and Terminated Counts
+  const [totalSummoned, totalTerminated] = await Promise.all([
+    Student.countDocuments({
+      ...studentMatchFilter,
+      summoned: true
+    }),
+    Student.countDocuments({
+      ...studentMatchFilter,
+      isTerminated: true
+    }),
+  ]);
+
+  const [todaysClass, todaysAttendanceRate, assignmentDue, totalUpcomingExams] = await Promise.all([
     ClassSchedule.countDocuments({ teacherId: user.teacherId, days: day }),
+     
+    
     ClassSchedule.aggregate([
       {
         $match: {
@@ -112,13 +145,27 @@ const getTeacherHomePageOverview = async (user: TAuthUser) => {
       teacherId: user.userId,
       status: { $eq: 'on-going' },
     }),
+
+    //added total upcoming exams count
+    Exam.countDocuments({
+      teacherId: user.teacherId,
+      date: { $gt: today }
+    }),
   ]);
+
 
   return {
     todaysClass,
     overallAttendanceRate: todaysAttendanceRate[0]?.overallAttendanceRate || 0,
     activeStudents: todaysAttendanceRate[0]?.totalPresentSum || 0,
     assignmentDue,
+    totalUpcomingExams,
+    // NEW DATA
+    totalSummoned,
+    totalTerminated,
+
+    // FULL SUPERVISOR CLASS LIST
+    supervisorClasses,
   };
 };
 
@@ -141,6 +188,44 @@ const getDailyWeeklyMonthlyAttendanceRate = async (user: TAuthUser) => {
     getAttendanceRate(teacherId, startOfWeek),
     getAttendanceRate(teacherId, startOfMonth),
   ]);
+
+  const dailyAttendanceRate = calculateAttendanceRate(daily);
+  const weeklyAttendanceRate = calculateAttendanceRate(weekly);
+  const monthlyAttendanceRate = calculateAttendanceRate(monthly);
+
+  return {
+    dailyAttendanceRate: dailyAttendanceRate?.attendanceRate || 0,
+    weeklyAttendanceRate: weeklyAttendanceRate?.attendanceRate || 0,
+    monthlyAttendanceRate: monthlyAttendanceRate?.attendanceRate || 0,
+  };
+};
+
+const getDailyWeeklyMonthlyAttendanceRateOfSpecificClassIdAndSection = async ( classId : string, section : string) => {
+
+  console.log({classId, section});
+
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0); // Start of today in UTC
+
+  const startOfWeek = new Date(today);
+  startOfWeek.setUTCDate(today.getUTCDate() - today.getUTCDay()); // Start from Sunday
+  startOfWeek.setUTCHours(0, 0, 0, 0);
+
+  const startOfMonth = new Date(
+    Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1),
+  ); // First of the month in UTC
+
+  const classObjectId = new mongoose.Types.ObjectId(classId);
+
+  console.log({today, startOfWeek, startOfMonth});
+
+  const [daily, weekly, monthly] = await Promise.all([
+    getAttendanceRateByClassIdAndSection(classObjectId, section, today),
+    getAttendanceRateByClassIdAndSection(classObjectId, section, startOfWeek),
+    getAttendanceRateByClassIdAndSection(classObjectId, section, startOfMonth),
+  ]);
+
+  console.log({dailyData: daily.length, weeklyData: weekly.length, monthlyData: monthly.length});
 
   const dailyAttendanceRate = calculateAttendanceRate(daily);
   const weeklyAttendanceRate = calculateAttendanceRate(weekly);
@@ -357,4 +442,5 @@ export const OverviewService = {
   getParentHomePageOverview,
   getAdminHomePageOverview,
   getStudentAttendance,
+  getDailyWeeklyMonthlyAttendanceRateOfSpecificClassIdAndSection
 };

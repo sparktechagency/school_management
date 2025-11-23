@@ -36,17 +36,17 @@ const loginUser = async (payload: Pick<TUser, 'phoneNumber'>) => {
 
   const otpExpiryTime = parseInt(config.otp_expire_in as string) || 3;
 
-  // try {
-  //   await OtpService.sendOTP(
-  //     phoneNumber,
-  //     otpExpiryTime,
-  //     'phone',
-  //     'login-verification',
-  //     otp,
-  //   );
-  // } catch (error) {
-  //   console.log(error);
-  // }
+  try {
+    await OtpService.sendOTP(
+      phoneNumber,
+      otpExpiryTime,
+      'phone',
+      'login-verification',
+      otp,
+    );
+  } catch (error) {
+    console.log(error);
+  }
 
   const userData = {
     userId: user?._id,

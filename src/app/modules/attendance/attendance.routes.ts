@@ -34,6 +34,7 @@ router
     auth(USER_ROLE.student),
     AttendanceController.getMyAttendanceDetails,
   )
+  
   .get(
     '/details/:attendanceId',
     auth(USER_ROLE.teacher, USER_ROLE.school, USER_ROLE.manager),

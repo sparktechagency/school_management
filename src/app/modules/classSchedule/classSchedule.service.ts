@@ -24,6 +24,7 @@ const createClassSchedule = async (
   payload: Partial<TClassSchedule>,
   user: TAuthUser,
 ) => {
+  
   const findClass = await ClassSchedule.findOne({
     schoolId: user.schoolId,
     teacherId: payload.teacherId,

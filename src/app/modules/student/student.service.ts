@@ -12,13 +12,15 @@ import Parents from '../parents/parents.model';
 import School from '../school/school.model';
 import { MulterFile } from '../user/user.controller';
 import User from '../user/user.model';
-import { StudentRow, TStudent } from './student.interface';
+import { RemoveTerminationPayload, StudentRow, SummonStudentPayload, TerminateStudentPayload, TStudent } from './student.interface';
 import Student from './student.model';
 import {
   createStudentWithProfile,
   handleParentUserCreation,
   parseStudentXlsxData,
 } from './students.helper';
+import AppError from '../../utils/AppError';
+import httpStatus from 'http-status';
 
 const createStudent = async (
   payload: Partial<TStudent> & { phoneNumber: string; name?: string },
@@ -246,6 +248,30 @@ const getAllStudents = async (
   const meta = await sudentQuery.countTotal(User);
 
   return { meta, result };
+};
+
+
+//created this funbtion by me
+const getAllStudentsListOfSpecificClassIdAndSection = async (
+  classId: string,
+  section: string,
+) => {
+  // Convert classId to ObjectId
+  const classObjectId = new mongoose.Types.ObjectId(classId);
+
+  // Query students and populate user info
+  const students = await Student.find({
+    classId: classObjectId,
+    section,
+  })
+    .select('userId schoolId classId schoolName className section fatherPhoneNumber motherPhoneNumber isTerminated')
+    .populate({
+      path: 'userId',
+      select: 'name email', // select only the fields you need
+    })
+    .sort({ createdAt: -1 }); // latest students first
+
+  return students;
 };
 
 const editStudent = async (id: string, payload: any) => {
@@ -518,6 +544,117 @@ const createStudentWithXlsx = async (file: MulterFile) => {
   return createdStudents;
 };
 
+
+// ==========================
+// TERMINATE STUDENT
+// ==========================
+const terminateStudentByTeacher = async (payload: TerminateStudentPayload) => {
+  const { studentId, terminateBy, terminatedDays} = payload;
+
+ 
+
+  // Validate inputs
+  if (!studentId || !terminateBy || !terminatedDays) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      'studentId, terminateBy, and terminatedDays are required'
+    );
+  }
+
+  // Convert to ObjectId
+  const studentObjectId = new mongoose.Types.ObjectId(studentId);
+  const terminateByObjectId = new mongoose.Types.ObjectId(terminateBy);
+
+  // Find student
+  const student = await Student.findById(studentObjectId);
+  if (!student) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Student not found');
+  }
+
+  // Update student termination info
+  student.isTerminated = true;
+  student.termination = {
+    terminatedDays,
+    terminateBy: terminateBy as any,
+    actionTime: new Date(),
+  };
+
+  await student.save();
+
+  return student;
+};
+
+
+// ==========================
+// REMOVE TERMINATION
+// ==========================
+const removeTermination= async (payload: RemoveTerminationPayload) => {
+  const { studentId, removedBy } = payload;
+
+  // Validate input
+  if (!studentId || !removedBy) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      'studentId and removedBy are required'
+    );
+  }
+
+  // Convert to ObjectId
+  const studentObjectId = new mongoose.Types.ObjectId(studentId);
+  const removedByObjectId = new mongoose.Types.ObjectId(removedBy);
+
+  // Find student
+  const student = await Student.findById(studentObjectId);
+  if (!student) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Student not found');
+  }
+
+  // Remove termination
+  student.isTerminated = false;
+  if (student.termination) {
+    student.termination.removedBy = removedByObjectId as any;
+    student.termination.removedTime = new Date();
+  }
+  student.termination = null;
+
+  await student.save();
+
+  return student;
+};
+
+
+// ==========================
+// SUMMON STUDENT
+// ==========================
+const summonStudent = async (payload: SummonStudentPayload) => {
+  const { studentId, summonedBy } = payload;
+
+  // Validate inputs
+  if (!studentId || !summonedBy) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      'studentId  are required'
+    );
+  }
+
+  // Convert studentId to ObjectId
+  const studentObjectId = new mongoose.Types.ObjectId(studentId);
+
+  // Find the student
+  const student = await Student.findById(studentObjectId);
+  if (!student) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Student not found');
+  }
+
+  // Update summoned status
+  student.summoned = true;
+  student.summonedBy = summonedBy as any;
+
+  await student.save();
+
+  return student;
+};
+
 export const StudentService = {
   createStudent,
   findStudent,
@@ -529,4 +666,8 @@ export const StudentService = {
   getParentsList,
   getParentsDetails,
   createStudentWithXlsx,
+  getAllStudentsListOfSpecificClassIdAndSection,
+  terminateStudentByTeacher,
+  removeTermination,
+  summonStudent
 };

@@ -99,6 +99,24 @@ const OverviewController = {
       data: result,
     });
   }),
+
+  getDailyWeeklyMonthlyAttendanceRateOfSpecificClassIdAndSection: catchAsync(async (req, res) => {
+
+    const {classId, section} = req.query;
+
+    const result = await OverviewService.getDailyWeeklyMonthlyAttendanceRateOfSpecificClassIdAndSection(
+      classId as string, section as string
+    );
+
+    sendResponse(res, {
+      statusCode: 200,
+      success: true,
+      message: 'Attendance overview (daily, weekly, monthly) retrieved successfully',
+      data: result,
+    });
+  }),
+
+
 };
 
 export default OverviewController;

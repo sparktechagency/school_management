@@ -71,4 +71,5 @@ const attendanceSchema = new Schema<TAttendance>(
 );
 
 const Attendance = model<TAttendance>('Attendance', attendanceSchema);
+
 export default Attendance;

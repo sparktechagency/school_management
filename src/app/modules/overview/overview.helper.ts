@@ -15,8 +15,10 @@ const calculateAttendanceRate = (data: any) => {
     totalAbsent += absentCount;
   });
 
-  const total = totalPresent + totalAbsent;
 
+
+  const total = totalPresent + totalAbsent;
+ console.log({totalPresent, totalAbsent, total});
   const rate = total > 0 ? (totalPresent / total) * 100 : 0;
 
   return {
@@ -60,4 +62,45 @@ const getAttendanceRate = async (
   return result;
 };
 
-export { calculateAttendanceRate, getAttendanceRate };
+const getAttendanceRateByClassIdAndSection = async (
+  classId: mongoose.Types.ObjectId,
+  section: string,
+  fromDate: Date,
+) => {
+
+  console.log({classId, section, fromDate});
+  
+  const result = await ClassSchedule.aggregate([
+    {
+      $match: {
+        classId,
+        section,
+      },
+    },
+    {
+      $lookup: {
+        from: 'attendances',
+        localField: '_id',
+        foreignField: 'classScheduleId',
+        pipeline: [
+          {
+            $match: {
+              date: { $gte: fromDate },
+            },
+          },
+        ],
+        as: 'attendance',
+      },
+    },
+    {
+      $unwind: {
+        path: '$attendance',
+        preserveNullAndEmptyArrays: false,
+      },
+    },
+  ]);
+
+  return result;
+};
+
+export { calculateAttendanceRate, getAttendanceRate, getAttendanceRateByClassIdAndSection };

@@ -14,6 +14,7 @@ import School from './school.model';
 const createSchool = async (
   payload: Partial<TSchool> & { phoneNumber: string; name?: string },
 ) => {
+
   const newSchool = await createUserWithProfile({
     phoneNumber: payload.phoneNumber,
     role: USER_ROLE.school,
@@ -22,6 +23,7 @@ const createSchool = async (
 
   return newSchool;
 };
+
 
 const getSchoolList = async (query: Record<string, unknown>) => {
   const schoolListQuery = new AggregationQueryBuilder(query);

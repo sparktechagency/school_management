@@ -118,6 +118,8 @@ const editProfile = catchAsync(async (req, res) => {
   }
 
   const result = await UserService.editProfile(req.user as TAuthUser, req.body);
+
+  
   sendResponse(res, {
     data: result,
     success: true,

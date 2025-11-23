@@ -17,6 +17,7 @@ router
     validateRequest(StudentValidation.studentSchema),
     StudentController.createStudent,
   )
+  
   .post(
     '/create_student_using_xlsx',
     auth(
@@ -28,12 +29,39 @@ router
     upload.single('file'),
     StudentController.createStudentUsingXlsx,
   )
+
+  .patch(
+    "/terminate",
+    auth(USER_ROLE.admin, USER_ROLE.supperAdmin, USER_ROLE.school, USER_ROLE.teacher),
+    StudentController.terminateStudentByTeacher
+  )
+
+  .patch(
+    "/terminate/remove",
+    auth(USER_ROLE.admin, USER_ROLE.supperAdmin, USER_ROLE.school, USER_ROLE.teacher),
+    StudentController.removeTermination
+  )
+
+  .patch(
+    "/summoned",
+    auth(USER_ROLE.admin, USER_ROLE.supperAdmin, USER_ROLE.school, USER_ROLE.teacher),
+    StudentController.summonStudent
+  )
+
   .get(
     '/student_list',
     auth(USER_ROLE.admin, USER_ROLE.supperAdmin, USER_ROLE.school),
     StudentController.getAllStudents,
   )
+
+  .get(
+    '/specefic_student_list',
+    auth(USER_ROLE.admin, USER_ROLE.supperAdmin, USER_ROLE.school, USER_ROLE.teacher),
+    StudentController.getAllStudentsListOfSpecificClassIdAndSection,
+  )
+
   .get('/my_child', auth(USER_ROLE.parents), StudentController.getMyChildren)
+
   .get(
     '/parents_list',
     auth(USER_ROLE.parents, USER_ROLE.admin, USER_ROLE.supperAdmin),

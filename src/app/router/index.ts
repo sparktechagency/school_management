@@ -23,6 +23,9 @@ import { TermsRoutes } from '../modules/terms/terms.routes';
 import { UserRoutes } from '../modules/user/user.routes';
 import { FeedbackRoutes } from '../modules/feedback/feedback.routes';
 import { ManagerRoutes } from '../modules/manager/manager.routes';
+import { ClassSectionSupervisorRoutes } from '../modules/classSectionSuperVisor/ClassSectionSupervisor.route';
+import { StudentReportRoutes } from '../modules/studentReport/studentReport.route';
+import { StudentNoteRoutes } from '../modules/studentNote/studentNote.route';
 
 const router = Router();
 
@@ -53,6 +56,14 @@ const routes: TRoutes[] = [
     route: StudentRoutes,
   },
   {
+    path: '/student_report',
+    route: StudentReportRoutes
+  },
+  {
+    path: '/student_note',
+    route: StudentNoteRoutes
+  },
+  {
     path: '/manager',
     route: ManagerRoutes,
   },
@@ -67,6 +78,10 @@ const routes: TRoutes[] = [
   {
     path: '/class_schedule',
     route: ClassScheduleRoutes,
+  },
+  {
+    path: '/class_section_supervisor',
+    route: ClassSectionSupervisorRoutes
   },
   {
     path: '/attendance',

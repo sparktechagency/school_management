@@ -56,6 +56,7 @@ export const auth = (...requestedRole: TUserRole[]) => {
     }
 
     req.user = decoded as JwtPayload;
+    
     next();
   });
 };

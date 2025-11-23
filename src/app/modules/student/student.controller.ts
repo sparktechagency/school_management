@@ -4,6 +4,7 @@ import catchAsync from '../../utils/catchAsync';
 import sendResponse from '../../utils/sendResponse';
 import { MulterFile } from '../user/user.controller';
 import { StudentService } from './student.service';
+import AppError from '../../utils/AppError';
 
 const createStudent = catchAsync(async (req, res) => {
   const result = await StudentService.createStudent(
@@ -31,6 +32,27 @@ const getAllStudents = catchAsync(async (req, res) => {
   });
 });
 
+const getAllStudentsListOfSpecificClassIdAndSection = catchAsync(async (req, res) => {
+  const { classId, section } = req.query;
+
+  // Validate query params
+  if (!classId || !section) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      'Missing required query parameter(s): classId and section are required'
+    );
+  }
+
+  const result = await StudentService.getAllStudentsListOfSpecificClassIdAndSection(classId as string, section as string) as any;
+
+  sendResponse(res, {
+    success: true,
+    statusCode: httpStatus.OK,
+    message: `All students from class: ${result?.className} and section: "${section}" fetched successfully`,
+    data: result,
+  });
+});
+
 const getMyChildren = catchAsync(async (req, res) => {
   const result = await StudentService.getMyChildren(req.user as TAuthUser);
   sendResponse(res, {
@@ -40,6 +62,7 @@ const getMyChildren = catchAsync(async (req, res) => {
     data: result,
   });
 });
+
 const selectChild = catchAsync(async (req, res) => {
   const result = await StudentService.selectChild(req.params.userId);
   sendResponse(res, {
@@ -111,6 +134,89 @@ const createStudentUsingXlsx = catchAsync(async (req, res) => {
   });
 });
 
+
+// ==========================
+// TERMINATE STUDENT BY TEACHER
+// ==========================
+const terminateStudentByTeacher = catchAsync(async (req, res) => {
+  const { studentId, terminatedDays } = req.body;
+
+  if (!studentId || !terminatedDays) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      'studentId and terminatedDays are required'
+    );
+  }
+
+  const payload = {
+    studentId,
+    terminatedDays,
+    terminateBy: (req.user as TAuthUser).userId, // teacher id
+  };
+
+  const result = await StudentService.terminateStudentByTeacher(payload);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: httpStatus.OK,
+    message: `Student has been terminated for ${terminatedDays} day(s) successfully`,
+    data: result,
+  });
+
+});
+
+
+// ==========================
+// REMOVE TERMINATION
+// ==========================
+const removeTermination = catchAsync(async (req, res) => {
+  const { studentId } = req.body;
+
+  if (!studentId) {
+    throw new AppError(httpStatus.BAD_REQUEST, 'studentId is required');
+  }
+
+  // removedBy will be the current user (teacher/admin)
+  const removedBy = (req.user as TAuthUser).userId;
+
+  const result = await StudentService.removeTermination({
+    studentId,
+    removedBy,
+  });
+
+  sendResponse(res, {
+    success: true,
+    statusCode: httpStatus.OK,
+    message: 'Student termination removed successfully',
+    data: result,
+  });
+});
+
+// ==========================
+// SUMMON STUDENT
+// ==========================
+const summonStudent = catchAsync(async (req, res) => {
+  const { studentId } = req.body;
+
+  if (!studentId) {
+    throw new AppError(httpStatus.BAD_REQUEST, 'studentId is required');
+  }
+
+  const payload = {
+    studentId,
+    summonedBy: (req.user as TAuthUser).userId, // teacher/admin performing the action
+  };
+
+  const result = await StudentService.summonStudent(payload);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: httpStatus.OK,
+    message: 'Student has been summoned successfully',
+    data: result,
+  });
+});
+
 export const StudentController = {
   createStudent,
   getMyChildren,
@@ -121,4 +227,8 @@ export const StudentController = {
   getParentsList,
   getParentsDetails,
   createStudentUsingXlsx,
+  getAllStudentsListOfSpecificClassIdAndSection,
+  terminateStudentByTeacher,
+  removeTermination,
+  summonStudent
 };

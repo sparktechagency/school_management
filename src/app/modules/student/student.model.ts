@@ -1,6 +1,21 @@
 import { model, Schema } from 'mongoose';
 import { TStudent } from './student.interface';
 
+
+
+
+// Subdocument schema for termination info
+const terminationSchema = new Schema(
+  {
+    terminatedDays: { type: Number, required: true },
+    terminateBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    actionTime: { type: Date, default: Date.now },
+    removedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    removedTime: { type: Date },
+  },
+  { _id: false }
+);
+
 const studentSchema = new Schema<TStudent>(
   {
     userId: {
@@ -47,6 +62,22 @@ const studentSchema = new Schema<TStudent>(
       type: String,
       trim: true,
     },
+    isTerminated: { 
+      type: Boolean, 
+      default: false 
+    },
+    termination: { 
+      type: terminationSchema, 
+      default: null 
+    },
+    summoned: { 
+      type: Boolean, 
+      default: false 
+    },
+    summonedBy: { 
+      type: Schema.Types.ObjectId, 
+      ref: 'User' 
+    }
   },
   {
     timestamps: true,
