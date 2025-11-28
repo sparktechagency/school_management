@@ -9,13 +9,15 @@ route
   .post(
     '/create',
     auth(USER_ROLE.school, USER_ROLE.manager),
-    ClassController.createClass,
+    ClassController.createClassWithRoutines
   )
+
   .get(
     '/students_of_classes',
     auth(USER_ROLE.teacher),
     ClassController.getStudentsOfClasses,
   )
+  
   .get(
     '/school',
     auth(
@@ -27,6 +29,29 @@ route
     ),
     ClassController.getClassBySchoolId,
   )
+
+  .get(
+    "/group_by_level/:schoolId",
+    auth(
+      USER_ROLE.supperAdmin,
+      USER_ROLE.admin,
+      USER_ROLE.school,
+      USER_ROLE.teacher,
+      USER_ROLE.manager,
+    ),
+    ClassController.getAllClassesGroupedByLevel
+  )
+
+  .get(
+    "/all/:schoolId",
+    auth(
+      USER_ROLE.school,
+      USER_ROLE.teacher,
+      USER_ROLE.manager,
+    ),
+    ClassController.getAllClassSectionsOfSchool
+  )
+
   .get(
     '/:levelId',
     auth(

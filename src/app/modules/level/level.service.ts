@@ -38,9 +38,39 @@ const deleteLevel = async (id: string) => {
   return result;
 };
 
+const getLevelsWithClassesOfSchool =  async (schoolId: string) => {
+    // 1. Get all levels of this school
+    const levels = await Level.find({ schoolId })
+      .select('_id levelName')
+      .lean();
+
+    if (!levels.length) {
+      return [];
+    }
+
+    const levelIds = levels.map((l) => l._id);
+
+    // 2. Get all classes from those levels
+    const classes = await Class.find({ levelId: { $in: levelIds }, schoolId })
+      .select('_id className levelId section')
+      .lean();
+
+    // 3. Group classes under their levels
+    const response = levels.map((level) => ({
+      levelId: level._id,
+      levelName: level.levelName,
+      classes: classes.filter((cls) => String(cls.levelId) === String(level._id)),
+    }));
+
+    return response;
+  }
+
+
+
 export const LevelService = {
   createLevel,
   getAllLevels,
   updateLevel,
   deleteLevel,
+  getLevelsWithClassesOfSchool
 };

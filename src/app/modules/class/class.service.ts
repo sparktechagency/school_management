@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import mongoose from 'mongoose';
+import mongoose, { Types } from 'mongoose';
 import { USER_ROLE } from '../../constant';
 import { TAuthUser } from '../../interface/authUser';
 import AggregationQueryBuilder from '../../QueryBuilder/aggregationBuilder';
@@ -7,8 +7,10 @@ import { getSchoolIdFromUser } from '../../utils/getSchoolIdForManager';
 import Level from '../level/level.model';
 import Student from '../student/student.model';
 import { TeacherService } from '../teacher/teacher.service';
-import { TClass } from './class.interface';
+import { IClassSection, ILevelClassesFlat, TClass } from './class.interface';
 import Class from './class.model';
+import { sanitizeSections } from './class.utils';
+import { generateRoutineForSection } from '../classRoutine/classRoutine.utils';
 
 const createClass = async (payload: Partial<TClass>, user: TAuthUser) => {
   const findLevel = await Level.findById(payload.levelId);
@@ -28,10 +30,131 @@ const createClass = async (payload: Partial<TClass>, user: TAuthUser) => {
   return result;
 };
 
+const createClassWithRoutines = async (payload: Partial<TClass>, user: TAuthUser) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const findLevel = await Level.findById(payload.levelId).session(session);
+    if (!findLevel) throw new Error("Level not found");
+
+    const schoolId = getSchoolIdFromUser(user);
+
+    // Sanitize sections
+    const sections = sanitizeSections(payload.section);
+
+    console.log({sections});
+
+    if (sections.length === 0) throw new Error("No valid sections provided");
+
+    // Convert sections to string for Class model
+    const sectionString = sections;
+
+    // Create Class
+    const newClass = await Class.create(
+      [
+        {
+          ...payload,
+          levelName: findLevel.levelName,
+          schoolId,
+          section: sectionString,
+        },
+      ],
+      { session }
+    );
+
+    console.log({
+          ...payload,
+          levelName: findLevel.levelName,
+          schoolId,
+          section: sectionString,
+        });
+    // Generate routines for each section
+    for (const sec of sections) {
+      await generateRoutineForSection(newClass[0]._id, sec, session);
+    }
+
+    await session.commitTransaction();
+    session.endSession();
+
+    return newClass[0];
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    throw error;
+  }
+};
+
 const getAllClasses = async (user: TAuthUser, id: string) => {
   const schoolId = getSchoolIdFromUser(user);
   const result = await Class.find({ schoolId, levelId: id });
   return result;
+};
+
+const getAllClassSectionsOfSchool = async (schoolId: string): Promise<IClassSection[]> => {
+  
+  const classes = await Class.find({ schoolId });
+
+  const result: IClassSection[] = [];
+
+  for (const cls of classes) {
+    for (const section of cls.section) {
+      const totalStudents = await Student.countDocuments({
+        classId: cls._id,
+        section,
+      });
+
+      result.push({
+        classId: cls._id.toString(),
+        className: cls.className,
+        levelName: cls.levelName,
+        section,
+        totalStudents,
+      });
+    }
+  }
+
+  return result;
+};
+
+
+const getAllClassesGroupedByLevel = async (
+  schoolId: string
+): Promise<ILevelClassesFlat[]> => {
+  const schoolObjId = new Types.ObjectId(schoolId);
+
+  // Fetch classes of the school
+  const classes = await Class.find({ schoolId: schoolObjId }).lean();
+
+  const levelMap = new Map<string, ILevelClassesFlat>();
+
+  for (const cls of classes) {
+    // Create level entry if not exists
+    if (!levelMap.has(cls.levelId.toString())) {
+      levelMap.set(cls.levelId.toString(), {
+        levelId: cls.levelId.toString(),
+        levelName: cls.levelName,
+        classes: [],
+      });
+    }
+
+    // For each section → create separate entry
+    for (const section of cls.section) {
+      const totalStudents = await Student.countDocuments({
+        classId: cls._id,
+        section,
+      });
+
+      levelMap.get(cls.levelId.toString())?.classes.push({
+        classId: cls._id.toString(),
+        className: cls.className,
+        section,
+        totalStudents,
+      });
+    }
+  }
+
+  return Array.from(levelMap.values());
 };
 
 const updateClass = async (id: string, payload: Partial<TClass>) => {
@@ -150,10 +273,13 @@ const getStudentsOfClasses = async (
 
 export const ClassService = {
   createClass,
+  createClassWithRoutines,
   getAllClasses,
   updateClass,
   deleteClass,
   getClassBySchoolId,
   getSectionsByClassId,
   getStudentsOfClasses,
+  getAllClassSectionsOfSchool,
+  getAllClassesGroupedByLevel
 };

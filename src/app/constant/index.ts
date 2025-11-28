@@ -6,7 +6,6 @@ export const USER_ROLE = {
   teacher: 'teacher',
   parents: 'parents',
   student: 'student',
-  schoolAdmin: 'schoolAdmin',
 } as const;
 
 export const USER_STATUS = {

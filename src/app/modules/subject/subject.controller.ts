@@ -29,6 +29,17 @@ const getSubject = catchAsync(async (req, res) => {
   });
 });
 
+const getSubjectsWithTeachersOfSchool = catchAsync(async (req, res) => {
+  const {schoolId} = req.user;
+  const result = await SubjectService.getSubjectsWithTeachersOfSchool(schoolId);
+  sendResponse(res, {
+    statusCode: 200,
+    success: true,
+    message: 'Subjects with assigned teachers retrieved successfully',
+    data: result,
+  });
+})
+
 const updateSubject = catchAsync(async (req, res) => {
   const result = await SubjectService.updateSubject(
     req.body,
@@ -60,4 +71,5 @@ export const SubjectController = {
   getSubject,
   updateSubject,
   deleteSubject,
+  getSubjectsWithTeachersOfSchool
 };

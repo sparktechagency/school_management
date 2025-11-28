@@ -37,7 +37,7 @@ router
   )
 
   .patch(
-    "/terminate/remove",
+    "/terminate/remove/:studentId",
     auth(USER_ROLE.admin, USER_ROLE.supperAdmin, USER_ROLE.school, USER_ROLE.teacher),
     StudentController.removeTermination
   )
@@ -76,6 +76,11 @@ router
     '/select_child/:userId',
     auth(USER_ROLE.parents),
     StudentController.selectChild,
+  )
+  .get(
+    "/terminated_students",
+    auth(USER_ROLE.admin, USER_ROLE.supperAdmin, USER_ROLE.school),
+    StudentController.getTerminatedStudentsBySchool
   )
   .patch(
     '/edit_student/:studentId',

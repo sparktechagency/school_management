@@ -1,0 +1,11 @@
+[
+  { "periodNumber": 1, "name": "Period 1", "startTime": "07:30", "endTime": "08:10", "isBreak": false },
+  { "periodNumber": 2, "name": "Period 2", "startTime": "08:10", "endTime": "08:50", "isBreak": false },
+  { "periodNumber": 3, "name": "Period 3", "startTime": "08:50", "endTime": "09:30", "isBreak": false },
+
+  { "periodNumber": 0, "name": "Break", "startTime": "09:30", "endTime": "09:50", "isBreak": true },
+
+  { "periodNumber": 4, "name": "Period 4", "startTime": "09:50", "endTime": "10:30", "isBreak": false },
+  { "periodNumber": 5, "name": "Period 5", "startTime": "10:30", "endTime": "11:10", "isBreak": false },
+  { "periodNumber": 6, "name": "Period 6", "startTime": "11:10", "endTime": "11:50", "isBreak": false }
+]

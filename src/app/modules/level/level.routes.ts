@@ -16,7 +16,23 @@ router
     auth(USER_ROLE.school, USER_ROLE.manager),
     LevelController.getAllLevels,
   )
-  .patch('/:levelId', auth(USER_ROLE.school), LevelController.updateLevel)
-  .delete('/:levelId', auth(USER_ROLE.school), LevelController.deleteLevel);
+
+  .get(
+    "/with_classes",
+    auth(USER_ROLE.school, USER_ROLE.manager),
+    LevelController.getLevelsWithClassesOfSchool
+  )
+
+  .patch(
+    '/:levelId', 
+    auth(USER_ROLE.school), 
+    LevelController.updateLevel
+  )
+
+  .delete(
+    '/:levelId', 
+    auth(USER_ROLE.school), 
+    LevelController.deleteLevel
+  );
 
 export const LevelRoutes = router;

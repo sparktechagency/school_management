@@ -26,6 +26,10 @@ import { ManagerRoutes } from '../modules/manager/manager.routes';
 import { ClassSectionSupervisorRoutes } from '../modules/classSectionSuperVisor/ClassSectionSupervisor.route';
 import { StudentReportRoutes } from '../modules/studentReport/studentReport.route';
 import { StudentNoteRoutes } from '../modules/studentNote/studentNote.route';
+import { ClassPeriodRoutes } from '../modules/classPeriod/classPeriod.route';
+import { ClassRoutineRoutes } from '../modules/classRoutine/classRoutine.route';
+import { AssignedSubjectTeacherRoutes } from '../modules/assignedSubjectTeacher/assignedSubjectTeacher.route';
+import { AttendancePeriodRoutes } from '../modules/attendancePeriod/attendancePeriod.route';
 
 const router = Router();
 
@@ -84,6 +88,19 @@ const routes: TRoutes[] = [
     route: ClassSectionSupervisorRoutes
   },
   {
+    path: '/class_routine',
+    route: ClassRoutineRoutes
+  },
+  {
+    path: "/class_period",
+    route: ClassPeriodRoutes
+  },
+
+  {
+    path: "/attendance_period",
+    route: AttendancePeriodRoutes
+  },
+  {
     path: '/attendance',
     route: AttendanceRoutes,
   },
@@ -94,6 +111,11 @@ const routes: TRoutes[] = [
   {
     path: '/assignment_submission',
     route: AssignmentSubmissionRoutes,
+  },
+
+  {
+    path: "/assign_teacher",
+    route: AssignedSubjectTeacherRoutes
   },
   {
     path: '/subject',

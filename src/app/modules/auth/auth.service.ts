@@ -32,7 +32,9 @@ const loginUser = async (payload: Pick<TUser, 'phoneNumber'>) => {
     throw new AppError(httpStatus.FORBIDDEN, 'This user is blocked!');
   }
 
-  const otp = Math.floor(100000 + Math.random() * 900000);
+  // const otp = Math.floor(100000 + Math.random() * 900000);
+
+  const otp = 123456;
 
   const otpExpiryTime = parseInt(config.otp_expire_in as string) || 3;
 

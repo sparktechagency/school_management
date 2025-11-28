@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Secret } from 'jsonwebtoken';
-import mongoose from 'mongoose';
+import mongoose, { mongo } from 'mongoose';
 import config from '../../../config';
 import { USER_ROLE } from '../../constant';
 import { TAuthUser } from '../../interface/authUser';
@@ -264,6 +264,28 @@ const getAllStudentsListOfSpecificClassIdAndSection = async (
     classId: classObjectId,
     section,
   })
+    .select('userId schoolId classId schoolName className section fatherPhoneNumber motherPhoneNumber parentsMessage isTerminated')
+    .populate({
+      path: 'userId',
+      select: 'name email', // select only the fields you need
+    })
+    .sort({ createdAt: -1 }); // latest students first
+
+  return students;
+};
+
+const getAllStudentsListOfSchool = async (
+  classId: string,
+  section: string,
+) => {
+  // Convert classId to ObjectId
+  const classObjectId = new mongoose.Types.ObjectId(classId);
+
+  // Query students and populate user info
+  const students = await Student.find({
+    classId: classObjectId,
+    section,
+  })
     .select('userId schoolId classId schoolName className section fatherPhoneNumber motherPhoneNumber isTerminated')
     .populate({
       path: 'userId',
@@ -272,6 +294,7 @@ const getAllStudentsListOfSpecificClassIdAndSection = async (
     .sort({ createdAt: -1 }); // latest students first
 
   return students;
+
 };
 
 const editStudent = async (id: string, payload: any) => {
@@ -655,6 +678,28 @@ const summonStudent = async (payload: SummonStudentPayload) => {
   return student;
 };
 
+
+const getAllTerminatedStudentsBySchool = async (schoolId: string) => {
+  // Convert schoolId string to ObjectId
+  const schoolObjectId = new mongoose.Types.ObjectId(schoolId);
+
+  const terminatedStudents = await Student.find({
+      isTerminated: true,
+      schoolId: schoolObjectId, // filter by school
+    })
+    .sort({ 'termination.actionTime': -1 }) // latest terminated first
+    .populate('userId', 'name') // populate student name
+    .populate('termination.terminateBy', 'name') // populate who terminated
+    .lean();
+
+  return terminatedStudents.map((student) => ({
+    studentId: student._id,
+    studentName: (student.userId as any)?.name || 'N/A',
+    terminatedBy: (student.termination?.terminateBy as any)?.name || 'N/A',
+    terminatedAt: student.termination?.actionTime || null,
+  }));
+};
+
 export const StudentService = {
   createStudent,
   findStudent,
@@ -669,5 +714,7 @@ export const StudentService = {
   getAllStudentsListOfSpecificClassIdAndSection,
   terminateStudentByTeacher,
   removeTermination,
-  summonStudent
+  summonStudent,
+  getAllStudentsListOfSchool,
+  getAllTerminatedStudentsBySchool
 };

@@ -13,161 +13,300 @@ import Exam from '../exam/exam.model';
 import { ClassSectionSupervisor } from '../classSectionSuperVisor/classSectionSupervisor.model';
 import Student from '../student/student.model';
 import { ClassSectionSupervisorService } from '../classSectionSuperVisor/classSectionSupervisor.service';
+import { ClassRoutine } from '../classRoutine/classRoutine.model';
+
+// const getTeacherHomePageOverview = async (user: TAuthUser) => {
+//   const day = new Date()
+//     .toLocaleString('en-US', { weekday: 'long' })
+//     .toLowerCase();
+
+//   const today = new Date();
+//   today.setUTCHours(0, 0, 0, 0);
+
+//  // Get classes where this teacher is supervisor
+//   const supervisorClasses = await ClassSectionSupervisorService.getMySupervisorsClasses(user.teacherId);
+
+//   // Prepare filters for student counting
+//   const classFilters = supervisorClasses.map((cls: any) => ({
+//     classId: cls.classId,
+//     section: cls.section,
+//   }));
+
+//   const studentMatchFilter =
+//     classFilters.length > 0 ? { $or: classFilters } : { _id: null };
+
+//   // Summoned and Terminated Counts
+//   const [totalSummoned, totalTerminated] = await Promise.all([
+//     Student.countDocuments({
+//       ...studentMatchFilter,
+//       summoned: true
+//     }),
+//     Student.countDocuments({
+//       ...studentMatchFilter,
+//       isTerminated: true
+//     }),
+//   ]);
+
+
+
+
+//   const [todaysClass, todaysAttendanceRate, assignmentDue, totalUpcomingExams] = await Promise.all([
+//     ClassSchedule.countDocuments({ teacherId: user.teacherId, days: day }),
+     
+    
+//     ClassSchedule.aggregate([
+//       {
+//         $match: {
+//           teacherId: new mongoose.Types.ObjectId(String(user.teacherId)),
+//           days: day,
+//         },
+//       },
+//       {
+//         $lookup: {
+//           from: 'attendances',
+//           localField: '_id',
+//           foreignField: 'classScheduleId',
+//           as: 'attendance',
+//         },
+//       },
+//       {
+//         $unwind: {
+//           path: '$attendance',
+//           preserveNullAndEmptyArrays: true,
+//         },
+//       },
+
+//       {
+//         $group: {
+//           _id: '$_id',
+//           totalPresent: { $first: '$attendance.presentStudents' },
+//           totalStudents: { $first: '$attendance.totalStudents' },
+//         },
+//       },
+//       {
+//         $project: {
+//           totalStudents: 1,
+//           totalPresentCount: { $size: { $ifNull: ['$totalPresent', []] } },
+//           attendanceRate: {
+//             $cond: [
+//               { $eq: ['$totalStudents', 0] },
+//               0,
+//               {
+//                 $round: [
+//                   {
+//                     $multiply: [
+//                       {
+//                         $divide: [
+//                           { $size: { $ifNull: ['$totalPresent', []] } },
+//                           '$totalStudents',
+//                         ],
+//                       },
+//                       100,
+//                     ],
+//                   },
+//                   2,
+//                 ],
+//               },
+//             ],
+//           },
+//         },
+//       },
+//       // New stage: Calculate overall attendance rate
+//       {
+//         $group: {
+//           _id: null,
+//           totalPresentSum: { $sum: '$totalPresentCount' },
+//           totalStudentSum: { $sum: '$totalStudents' },
+//         },
+//       },
+//       {
+//         $project: {
+//           _id: 0,
+//           totalPresentSum: 1,
+//           totalStudentSum: 1,
+//           overallAttendanceRate: {
+//             $cond: [
+//               { $eq: ['$totalStudentSum', 0] },
+//               0,
+//               {
+//                 $round: [
+//                   {
+//                     $multiply: [
+//                       { $divide: ['$totalPresentSum', '$totalStudentSum'] },
+//                       100,
+//                     ],
+//                   },
+//                   2,
+//                 ],
+//               },
+//             ],
+//           },
+//         },
+//       },
+//     ]),
+
+//     Assignment.countDocuments({
+//       teacherId: user.userId,
+//       status: { $eq: 'on-going' },
+//     }),
+
+//     //added total upcoming exams count
+//     Exam.countDocuments({
+//       teacherId: user.teacherId,
+//       date: { $gt: today }
+//     }),
+//   ]);
+
+
+//   return {
+//     todaysClass,
+//     overallAttendanceRate: todaysAttendanceRate[0]?.overallAttendanceRate || 0,
+//     activeStudents: todaysAttendanceRate[0]?.totalPresentSum || 0,
+//     assignmentDue,
+//     totalUpcomingExams,
+//     // NEW DATA
+//     totalSummoned,
+//     totalTerminated,
+
+//     // FULL SUPERVISOR CLASS LIST
+//     supervisorClasses,
+//   };
+// };
+
 
 const getTeacherHomePageOverview = async (user: TAuthUser) => {
-  const day = new Date()
-    .toLocaleString('en-US', { weekday: 'long' })
-    .toLowerCase();
+  const day = new Date().toLocaleString("en-US", { weekday: "long" }).toLowerCase();
+
+  console.log("day ===>>> ",day);
 
   const today = new Date();
   today.setUTCHours(0, 0, 0, 0);
 
- // Get classes where this teacher is supervisor
+  // Supervisor classes
   const supervisorClasses = await ClassSectionSupervisorService.getMySupervisorsClasses(user.teacherId);
 
-  // Prepare filters for student counting
   const classFilters = supervisorClasses.map((cls: any) => ({
     classId: cls.classId,
     section: cls.section,
   }));
 
-  const studentMatchFilter =
-    classFilters.length > 0 ? { $or: classFilters } : { _id: null };
+  const studentMatchFilter = classFilters.length ? { $or: classFilters } : { _id: null };
 
-  // Summoned and Terminated Counts
   const [totalSummoned, totalTerminated] = await Promise.all([
-    Student.countDocuments({
-      ...studentMatchFilter,
-      summoned: true
-    }),
-    Student.countDocuments({
-      ...studentMatchFilter,
-      isTerminated: true
-    }),
+    Student.countDocuments({ ...studentMatchFilter, summoned: true }),
+    Student.countDocuments({ ...studentMatchFilter, isTerminated: true }),
   ]);
 
-  const [todaysClass, todaysAttendanceRate, assignmentDue, totalUpcomingExams] = await Promise.all([
-    ClassSchedule.countDocuments({ teacherId: user.teacherId, days: day }),
-     
-    
-    ClassSchedule.aggregate([
-      {
-        $match: {
-          teacherId: new mongoose.Types.ObjectId(String(user.teacherId)),
-          days: day,
-        },
+  // -----------------------------
+  // TODAY'S CLASS USING CLASSROUTINE
+  // -----------------------------
+  const todaysClassResult = await ClassRoutine.aggregate([
+    { $unwind: "$routines" },
+    { $match: { "routines.day": day } },
+    { $unwind: "$routines.periods" },
+    {
+      $match: {
+        "routines.periods.teacherId": new mongoose.Types.ObjectId(String(user.teacherId)),
       },
-      {
-        $lookup: {
-          from: 'attendances',
-          localField: '_id',
-          foreignField: 'classScheduleId',
-          as: 'attendance',
-        },
-      },
-      {
-        $unwind: {
-          path: '$attendance',
-          preserveNullAndEmptyArrays: true,
-        },
-      },
-
-      {
-        $group: {
-          _id: '$_id',
-          totalPresent: { $first: '$attendance.presentStudents' },
-          totalStudents: { $first: '$attendance.totalStudents' },
-        },
-      },
-      {
-        $project: {
-          totalStudents: 1,
-          totalPresentCount: { $size: { $ifNull: ['$totalPresent', []] } },
-          attendanceRate: {
-            $cond: [
-              { $eq: ['$totalStudents', 0] },
-              0,
-              {
-                $round: [
-                  {
-                    $multiply: [
-                      {
-                        $divide: [
-                          { $size: { $ifNull: ['$totalPresent', []] } },
-                          '$totalStudents',
-                        ],
-                      },
-                      100,
-                    ],
-                  },
-                  2,
-                ],
-              },
-            ],
-          },
-        },
-      },
-      // New stage: Calculate overall attendance rate
-      {
-        $group: {
-          _id: null,
-          totalPresentSum: { $sum: '$totalPresentCount' },
-          totalStudentSum: { $sum: '$totalStudents' },
-        },
-      },
-      {
-        $project: {
-          _id: 0,
-          totalPresentSum: 1,
-          totalStudentSum: 1,
-          overallAttendanceRate: {
-            $cond: [
-              { $eq: ['$totalStudentSum', 0] },
-              0,
-              {
-                $round: [
-                  {
-                    $multiply: [
-                      { $divide: ['$totalPresentSum', '$totalStudentSum'] },
-                      100,
-                    ],
-                  },
-                  2,
-                ],
-              },
-            ],
-          },
-        },
-      },
-    ]),
-
-    Assignment.countDocuments({
-      teacherId: user.userId,
-      status: { $eq: 'on-going' },
-    }),
-
-    //added total upcoming exams count
-    Exam.countDocuments({
-      teacherId: user.teacherId,
-      date: { $gt: today }
-    }),
+    },
+    { $count: "totalClasses" },
   ]);
 
+  const todaysClass = todaysClassResult[0]?.totalClasses || 0;
+
+  // -----------------------------
+  // ATTENDANCE RATE USING CLASSROUTINE
+  // -----------------------------
+  const attendanceStats = await ClassRoutine.aggregate([
+    { $unwind: "$routines" },
+    { $match: { "routines.day": day } },
+    { $unwind: "$routines.periods" },
+    {
+      $match: {
+        "routines.periods.teacherId": new mongoose.Types.ObjectId(String(user.teacherId)),
+      },
+    },
+    {
+      $lookup: {
+        from: "attendances",
+        let: {
+          cid: "$classId",
+          sec: "$section",
+          pnum: "$routines.periods.periodNumber",
+        },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $eq: ["$classId", "$$cid"] },
+                  { $eq: ["$section", "$$sec"] },
+                  { $eq: ["$periodNumber", "$$pnum"] },
+                  { $eq: ["$date", today] },
+                ],
+              },
+            },
+          },
+        ],
+        as: "attendance",
+      },
+    },
+    {
+      $unwind: {
+        path: "$attendance",
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+    {
+      $group: {
+        _id: null,
+        totalStudents: { $sum: "$attendance.totalStudents" },
+        totalPresent: { $sum: { $size: { $ifNull: ["$attendance.presentStudents", []] } } },
+      },
+    },
+    {
+      $project: {
+        _id: 0,
+        totalStudents: 1,
+        totalPresent: 1,
+        attendanceRate: {
+          $cond: [
+            { $eq: ["$totalStudents", 0] },
+            0,
+            {
+              $round: [
+                {
+                  $multiply: [
+                    { $divide: ["$totalPresent", "$totalStudents"] },
+                    100,
+                  ],
+                },
+                2,
+              ],
+            },
+          ],
+        },
+      },
+    },
+  ]);
+
+  const overallAttendanceRate = attendanceStats[0]?.attendanceRate || 0;
+  const activeStudents = attendanceStats[0]?.totalPresent || 0;
 
   return {
     todaysClass,
-    overallAttendanceRate: todaysAttendanceRate[0]?.overallAttendanceRate || 0,
-    activeStudents: todaysAttendanceRate[0]?.totalPresentSum || 0,
-    assignmentDue,
-    totalUpcomingExams,
-    // NEW DATA
+    overallAttendanceRate,
+    activeStudents,
+    assignmentDue: 0, // remove old logic
+    totalUpcomingExams: 0, // adjust as needed
     totalSummoned,
     totalTerminated,
-
-    // FULL SUPERVISOR CLASS LIST
     supervisorClasses,
   };
 };
+
+
+
 
 const getDailyWeeklyMonthlyAttendanceRate = async (user: TAuthUser) => {
   const today = new Date();
@@ -434,6 +573,70 @@ const getAdminHomePageOverview = async (user: TAuthUser) => {
   return user;
 };
 
+const getHomePageOnlyOverviewOfAdminWithinApp = async (schoolId: string) => {
+  const schoolObjectId = new mongoose.Types.ObjectId(schoolId);
+
+  // Prepare today's date once
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+
+  // Run everything in parallel (fastest approach)
+  const [
+    studentStats,
+    presentResult
+  ] = await Promise.all([
+    // Count normal, terminated, summoned in one aggregated query
+    Student.aggregate([
+      { $match: { schoolId: schoolObjectId } },
+      {
+        $group: {
+          _id: null,
+          totalStudents: { $sum: 1 },
+          totalTerminatedStudents: {
+            $sum: { $cond: [{ $eq: ['$isTerminated', true] }, 1, 0] }
+          },
+          totalSummonedStudents: {
+            $sum: { $cond: [{ $eq: ['$summoned', true] }, 1, 0] }
+          }
+        }
+      }
+    ]),
+
+    // Attendance present count for today
+    Attendance.aggregate([
+      {
+        $match: {
+          schoolId: schoolObjectId,
+          date: { $gte: today }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalPresent: { $sum: { $size: '$presentStudents' } }
+        }
+      }
+    ])
+  ]);
+
+  // Extract results safely
+  const stats = studentStats[0] || {
+    totalStudents: 0,
+    totalTerminatedStudents: 0,
+    totalSummonedStudents: 0
+  };
+
+  const todayTotalPresentStudents =
+    presentResult.length > 0 ? presentResult[0].totalPresent : 0;
+
+  return {
+    totalStudents: stats.totalStudents,
+    totalTerminatedStudents: stats.totalTerminatedStudents,
+    totalSummonedStudents: stats.totalSummonedStudents,
+    todayTotalPresentStudents
+  };
+};
+
 export const OverviewService = {
   getTeacherHomePageOverview,
   getAssignmentCount,
@@ -442,5 +645,6 @@ export const OverviewService = {
   getParentHomePageOverview,
   getAdminHomePageOverview,
   getStudentAttendance,
-  getDailyWeeklyMonthlyAttendanceRateOfSpecificClassIdAndSection
+  getDailyWeeklyMonthlyAttendanceRateOfSpecificClassIdAndSection,
+  getHomePageOnlyOverviewOfAdminWithinApp
 };

@@ -48,6 +48,14 @@ router
     '/admin_overview',
     auth(USER_ROLE.admin),
     OverviewController.getAdminHomePageOverview,
-  );
+  )
+
+  .get(
+  '/admin/home-overview',
+  auth(USER_ROLE.school, USER_ROLE.manager), // apply roles as needed
+  OverviewController.getHomePageOnlyOverviewOfAdminWithinApp
+)
+
+  
 
 export const OverviewRoutes = router;

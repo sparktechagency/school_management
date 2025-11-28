@@ -21,6 +21,13 @@ router
     ),
     SubjectController.getSubject,
   )
+
+  .get(
+    "/with_teachers",
+    auth(USER_ROLE.school, USER_ROLE.manager),
+    SubjectController.getSubjectsWithTeachersOfSchool
+  )
+  
   .patch('/action', auth(USER_ROLE.school), SubjectController.updateSubject)
   .delete(
     '/:subjectId',

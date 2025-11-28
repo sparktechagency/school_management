@@ -116,6 +116,22 @@ const OverviewController = {
     });
   }),
 
+   getHomePageOnlyOverviewOfAdminWithinApp: catchAsync(async (req, res) => {
+    const { schoolId } = req.user; // assuming school user is logged in
+
+    const result =
+      await OverviewService.getHomePageOnlyOverviewOfAdminWithinApp(
+        schoolId as string
+      );
+
+    sendResponse(res, {
+      statusCode: 200,
+      success: true,
+      message: 'Admin home dashboard overview retrieved successfully.',
+      data: result,
+    });
+  }),
+
 
 };
 

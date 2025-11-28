@@ -20,6 +20,7 @@ const createTeacher = async (
   payload: Partial<TTeacher> & { phoneNumber: string; name?: string },
   user: TAuthUser,
 ) => {
+  
   if (user.role === USER_ROLE.school) {
     const findSchool = await School.findById(user.schoolId);
     if (!findSchool)
@@ -35,6 +36,7 @@ const createTeacher = async (
   });
 
   const message = `New teacher ${payload.name} joined ${new Date().toLocaleTimeString()}`;
+
   await sendNotification(user, {
     senderId: teacher._id,
     role: user.role,

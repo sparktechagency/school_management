@@ -5,6 +5,7 @@ import sendResponse from '../../utils/sendResponse';
 import { MulterFile } from '../user/user.controller';
 import { StudentService } from './student.service';
 import AppError from '../../utils/AppError';
+import { Request, Response } from 'express';
 
 const createStudent = catchAsync(async (req, res) => {
   const result = await StudentService.createStudent(
@@ -31,6 +32,8 @@ const getAllStudents = catchAsync(async (req, res) => {
     data: result,
   });
 });
+
+
 
 const getAllStudentsListOfSpecificClassIdAndSection = catchAsync(async (req, res) => {
   const { classId, section } = req.query;
@@ -170,7 +173,7 @@ const terminateStudentByTeacher = catchAsync(async (req, res) => {
 // REMOVE TERMINATION
 // ==========================
 const removeTermination = catchAsync(async (req, res) => {
-  const { studentId } = req.body;
+  const { studentId } = req.params;
 
   if (!studentId) {
     throw new AppError(httpStatus.BAD_REQUEST, 'studentId is required');
@@ -217,6 +220,30 @@ const summonStudent = catchAsync(async (req, res) => {
   });
 });
 
+
+const getTerminatedStudentsBySchool = catchAsync(async (req: Request, res: Response) => {
+    
+    const { schoolId } = req.user;
+
+    if (!schoolId || typeof schoolId !== 'string') {
+      return sendResponse(res, {
+        statusCode: 400,
+        success: false,
+        message: 'schoolId is required and must be a string',
+      });
+    }
+
+    const terminatedStudents = await StudentService.getAllTerminatedStudentsBySchool(schoolId);
+
+    sendResponse(res, {
+      statusCode: 200,
+      success: true,
+      message: 'Terminated students retrieved successfully',
+      data: terminatedStudents,
+    });
+  }
+);
+
 export const StudentController = {
   createStudent,
   getMyChildren,
@@ -230,5 +257,6 @@ export const StudentController = {
   getAllStudentsListOfSpecificClassIdAndSection,
   terminateStudentByTeacher,
   removeTermination,
-  summonStudent
+  summonStudent,
+  getTerminatedStudentsBySchool
 };

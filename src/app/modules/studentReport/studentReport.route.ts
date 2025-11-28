@@ -34,7 +34,7 @@ router
     //   USER_ROLE.school,
     //   USER_ROLE.manager,
     //   USER_ROLE.teacher,
-    //   USER_ROLE.supperAdmin,
+    //   USER_ROLE.supperAdmin,j
     // ),
     StudentReportController.getAllReportsByClassIdAndSection,
   )

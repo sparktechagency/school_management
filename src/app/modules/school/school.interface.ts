@@ -8,4 +8,6 @@ export type TSchool = {
   adminPhone: string;
   schoolImage: string;
   coverImage: string;
+  isActive: boolean;
+  isBlocked: boolean;
 };
