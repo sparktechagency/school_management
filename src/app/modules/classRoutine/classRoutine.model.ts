@@ -39,6 +39,7 @@ const DayRoutineSchema = new Schema<IDayRoutine>(
 // ClassRoutine schema
 const ClassRoutineSchema = new Schema<IClassRoutine>(
   {
+    schoolId: { type: Schema.Types.ObjectId, ref: "School", required: true },
     classId: { type: Schema.Types.ObjectId, ref: "Class", required: true },
     section: { type: String, required: true },
     periods: { type: [PeriodSchema], default: [] },    // Master period template

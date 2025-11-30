@@ -82,6 +82,14 @@ router
     auth(USER_ROLE.admin, USER_ROLE.supperAdmin, USER_ROLE.school),
     StudentController.getTerminatedStudentsBySchool
   )
+
+  .get(
+    "/summoned_students",
+    auth(USER_ROLE.admin, USER_ROLE.supperAdmin, USER_ROLE.school),
+    StudentController.getAllSummonedStudentBySchool
+  )
+
+
   .patch(
     '/edit_student/:studentId',
     auth(USER_ROLE.admin, USER_ROLE.supperAdmin, USER_ROLE.school),

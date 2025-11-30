@@ -71,7 +71,7 @@ const createClassWithRoutines = async (payload: Partial<TClass>, user: TAuthUser
         });
     // Generate routines for each section
     for (const sec of sections) {
-      await generateRoutineForSection(newClass[0]._id, sec, session);
+      await generateRoutineForSection(schoolId,newClass[0]._id, sec, session);
     }
 
     await session.commitTransaction();
@@ -158,7 +158,7 @@ const getAllClassesGroupedByLevel = async (
 };
 
 const updateClass = async (id: string, payload: Partial<TClass>) => {
-  const section = payload?.section?.map((item) => item).join(' / ');
+  const section = payload?.section?.map((item) => item);
 
   const result = await Class.findByIdAndUpdate(
     id,

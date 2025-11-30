@@ -224,6 +224,11 @@ const getTeacherList = async (user: TAuthUser, query: any) => {
   return { meta, result };
 };
 
+const getAllTeachers = async (schoolId: string) => {
+  const teachers = await Teacher.find({ schoolId }).populate('userId', 'name').select('userId').lean();
+  return teachers;
+}
+
 const editTeacher = async (
   teacherId: string,
   payload: Partial<TTeacher & { phoneNumber: string; name?: string }>,
@@ -298,4 +303,5 @@ export const TeacherService = {
   getTeacherList,
   editTeacher,
   deleteTeacher,
+  getAllTeachers
 };

@@ -14,6 +14,7 @@ import { ClassSectionSupervisor } from '../classSectionSuperVisor/classSectionSu
 import Student from '../student/student.model';
 import { ClassSectionSupervisorService } from '../classSectionSuperVisor/classSectionSupervisor.service';
 import { ClassRoutine } from '../classRoutine/classRoutine.model';
+import Class from '../class/class.model';
 
 // const getTeacherHomePageOverview = async (user: TAuthUser) => {
 //   const day = new Date()
@@ -206,7 +207,7 @@ const getTeacherHomePageOverview = async (user: TAuthUser) => {
     { $unwind: "$routines.periods" },
     {
       $match: {
-        "routines.periods.teacherId": new mongoose.Types.ObjectId(String(user.teacherId)),
+        "routines.periods.teacherId": new mongoose.Types.ObjectId(String(user.userId)),
       },
     },
     { $count: "totalClasses" },
@@ -223,7 +224,7 @@ const getTeacherHomePageOverview = async (user: TAuthUser) => {
     { $unwind: "$routines.periods" },
     {
       $match: {
-        "routines.periods.teacherId": new mongoose.Types.ObjectId(String(user.teacherId)),
+        "routines.periods.teacherId": new mongoose.Types.ObjectId(String(user.userId)),
       },
     },
     {
@@ -369,6 +370,68 @@ const getDailyWeeklyMonthlyAttendanceRateOfSpecificClassIdAndSection = async ( c
   const dailyAttendanceRate = calculateAttendanceRate(daily);
   const weeklyAttendanceRate = calculateAttendanceRate(weekly);
   const monthlyAttendanceRate = calculateAttendanceRate(monthly);
+
+  return {
+    dailyAttendanceRate: dailyAttendanceRate?.attendanceRate || 0,
+    weeklyAttendanceRate: weeklyAttendanceRate?.attendanceRate || 0,
+    monthlyAttendanceRate: monthlyAttendanceRate?.attendanceRate || 0,
+  };
+};
+
+
+const getDailyWeeklyMonthlyAttendanceRateOfSchool = async (schoolId: string) => {
+  if (!mongoose.Types.ObjectId.isValid(schoolId)) {
+    throw new Error("Invalid schoolId");
+  }
+
+  const schoolObjectId = new mongoose.Types.ObjectId(schoolId);
+
+  // ------------------------------
+  // DATE SETUP
+  // ------------------------------
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0); // Start of today in UTC
+
+  const startOfWeek = new Date(today);
+  startOfWeek.setUTCDate(today.getUTCDate() - today.getUTCDay()); // Sunday
+  startOfWeek.setUTCHours(0, 0, 0, 0);
+
+  const startOfMonth = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1));
+
+  // ------------------------------
+  // FETCH ALL CLASSES OF THE SCHOOL
+  // ------------------------------
+  const classes = await Class.find({ schoolId: schoolObjectId }).lean();
+
+  let dailyAll: any[] = [];
+  let weeklyAll: any[] = [];
+  let monthlyAll: any[] = [];
+
+  // ------------------------------
+  // LOOP THROUGH EACH CLASS AND EACH SECTION
+  // ------------------------------
+  for (const cls of classes) {
+    for (const section of cls.section) {
+      const classObjectId = new mongoose.Types.ObjectId(cls._id);
+
+      const [daily, weekly, monthly] = await Promise.all([
+        getAttendanceRateByClassIdAndSection(classObjectId, section, today),
+        getAttendanceRateByClassIdAndSection(classObjectId, section, startOfWeek),
+        getAttendanceRateByClassIdAndSection(classObjectId, section, startOfMonth),
+      ]);
+
+      dailyAll = dailyAll.concat(daily);
+      weeklyAll = weeklyAll.concat(weekly);
+      monthlyAll = monthlyAll.concat(monthly);
+    }
+  }
+
+  // ------------------------------
+  // CALCULATE ATTENDANCE RATES
+  // ------------------------------
+  const dailyAttendanceRate = calculateAttendanceRate(dailyAll);
+  const weeklyAttendanceRate = calculateAttendanceRate(weeklyAll);
+  const monthlyAttendanceRate = calculateAttendanceRate(monthlyAll);
 
   return {
     dailyAttendanceRate: dailyAttendanceRate?.attendanceRate || 0,
@@ -646,5 +709,6 @@ export const OverviewService = {
   getAdminHomePageOverview,
   getStudentAttendance,
   getDailyWeeklyMonthlyAttendanceRateOfSpecificClassIdAndSection,
-  getHomePageOnlyOverviewOfAdminWithinApp
+  getHomePageOnlyOverviewOfAdminWithinApp,
+  getDailyWeeklyMonthlyAttendanceRateOfSchool
 };

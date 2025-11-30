@@ -24,6 +24,13 @@ router
     auth(USER_ROLE.supperAdmin, USER_ROLE.school, USER_ROLE.admin),
     TeacherController.getTeacherList,
   )
+  
+  .get(
+    '/all/:schoolId',
+    auth(USER_ROLE.admin, USER_ROLE.supperAdmin, USER_ROLE.school),
+    TeacherController.getAllTeachers,
+  )
+
   .patch(
     '/edit_teacher/:teacherUserId',
     auth(USER_ROLE.admin, USER_ROLE.supperAdmin, USER_ROLE.school),

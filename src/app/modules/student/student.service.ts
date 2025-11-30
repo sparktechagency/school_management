@@ -24,7 +24,8 @@ import httpStatus from 'http-status';
 
 const createStudent = async (
   payload: Partial<TStudent> & { phoneNumber: string; name?: string },
-  user: TAuthUser,
+  user: TAuthUser | { role: string; schoolId: string },
+  mongoSession?: any
 ) => {
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -32,6 +33,7 @@ const createStudent = async (
   try {
     if (user.role === USER_ROLE.school) {
       const findSchool = await School.findById(user.schoolId);
+      if (!findSchool) throw new Error('School not found');
       payload.schoolId = user.schoolId as any;
       payload.schoolName = findSchool?.schoolName;
     }
@@ -650,13 +652,14 @@ const removeTermination= async (payload: RemoveTerminationPayload) => {
 // SUMMON STUDENT
 // ==========================
 const summonStudent = async (payload: SummonStudentPayload) => {
+
   const { studentId, summonedBy } = payload;
 
   // Validate inputs
   if (!studentId || !summonedBy) {
     throw new AppError(
       httpStatus.BAD_REQUEST,
-      'studentId  are required'
+      'studentId and summonedBy are required'
     );
   }
 
@@ -669,10 +672,22 @@ const summonStudent = async (payload: SummonStudentPayload) => {
     throw new AppError(httpStatus.NOT_FOUND, 'Student not found');
   }
 
-  // Update summoned status
-  student.summoned = true;
-  student.summonedBy = summonedBy as any;
+  const now = new Date();
 
+  // Update summon fields
+  student.summoned = true;
+  student.lastSummonedAt = now;
+
+  // Increment total summons
+  student.totalSummoned = (student.totalSummoned || 0) + 1;
+
+  // Push to summon history
+  student.summonedHistory.push({
+    summonedBy: new mongoose.Types.ObjectId(summonedBy) as any,
+    summonedAt: now,
+  });
+
+  // Save updated student
   await student.save();
 
   return student;
@@ -699,6 +714,36 @@ const getAllTerminatedStudentsBySchool = async (schoolId: string) => {
     terminatedAt: student.termination?.actionTime || null,
   }));
 };
+const getAllSummonedStudentBySchool = async (schoolId: string) => {
+  // Convert schoolId to ObjectId
+  const schoolObjectId = new mongoose.Types.ObjectId(schoolId);
+
+  // Fetch summoned students
+  const summonedStudents = await Student.find({
+      summoned: true,
+      schoolId: schoolObjectId,
+    })
+    .sort({ lastSummonedAt: -1 }) // latest summoned first
+    .populate('userId', 'name') // populate student name
+    .populate('summonedHistory.summonedBy', 'name') // populate who summoned
+    .lean();
+
+  return summonedStudents.map((student) => {
+    // Get last summon record
+    const lastHistory =
+      student.summonedHistory?.[student.summonedHistory.length - 1];
+
+    return {
+      studentId: student._id,
+      studentName: (student.userId as any)?.name || 'N/A',
+      lastSummonedBy: (lastHistory?.summonedBy as any)?.name || 'N/A',
+      lastSummonedAt: student.lastSummonedAt || null,
+      totalSummoned: student.totalSummoned || 0,
+    };
+  });
+};
+
+
 
 export const StudentService = {
   createStudent,
@@ -716,5 +761,6 @@ export const StudentService = {
   removeTermination,
   summonStudent,
   getAllStudentsListOfSchool,
-  getAllTerminatedStudentsBySchool
+  getAllTerminatedStudentsBySchool,
+  getAllSummonedStudentBySchool
 };

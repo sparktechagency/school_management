@@ -23,6 +23,13 @@ router
     // auth(USER_ROLE.teacher),
     OverviewController.getDailyWeeklyMonthlyAttendanceRateOfSpecificClassIdAndSection,
   )
+
+    .get(
+    '/daily_weekly_monthly_attendance_rate/Specific_school',
+    auth(USER_ROLE.teacher, USER_ROLE.school),
+    OverviewController.getDailyWeeklyMonthlyAttendanceRateOfSchool,
+  )
+
   
   .get(
     '/assignment_count',

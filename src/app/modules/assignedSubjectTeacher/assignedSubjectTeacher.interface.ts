@@ -28,5 +28,5 @@ export interface AssignTeacherPayload {
   subjectId: string;
   subjectName: string;
   teacherId: string;
-  teacherName: string;
+  teacherName?: string;
 }

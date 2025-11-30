@@ -111,7 +111,24 @@ const OverviewController = {
     sendResponse(res, {
       statusCode: 200,
       success: true,
-      message: 'Attendance overview (daily, weekly, monthly) retrieved successfully',
+      message: 'Attendance overview (daily, weekly, monthly) of specific class and section retrieved successfully',
+      data: result,
+    });
+  }),
+
+  getDailyWeeklyMonthlyAttendanceRateOfSchool: catchAsync(async (req, res) => {
+
+    console.log(req.user);
+    const {mySchoolId} = req.user;
+
+    const result = await OverviewService.getDailyWeeklyMonthlyAttendanceRateOfSchool(
+      mySchoolId as string
+    );
+
+    sendResponse(res, {
+      statusCode: 200,
+      success: true,
+      message: 'Attendance overview (daily, weekly, monthly) of specific school retrieved successfully',
       data: result,
     });
   }),

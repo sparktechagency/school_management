@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+import mongoose, { now } from "mongoose";
 import { AddSubjectPayload, AddSubjectToRoutinePayload, IPeriod, ManyRoutinePayload, } from "./classRoutine.interface";
 import { ClassRoutine } from "./classRoutine.model";
 import AssignedSubjectTeacher from "../assignedSubjectTeacher/assignedSubjectTeacher.model";
@@ -12,6 +12,7 @@ import { USER_ROLE } from "../../constant";
 import { StudentService } from "../student/student.service";
 import { AssignedSubjectTeacherService } from "../assignedSubjectTeacher/assignedSubjectTeacher.service";
 import { ClassSectionSupervisorService } from "../classSectionSuperVisor/classSectionSupervisor.service";
+import { ClassSectionSupervisor } from "../classSectionSuperVisor/classSectionSupervisor.model";
 
 const getRoutineByClassAndSection = async (classId: string, section: string) => {
   const routine = await ClassRoutine.findOne({ classId, section: section.toUpperCase() });
@@ -20,7 +21,15 @@ const getRoutineByClassAndSection = async (classId: string, section: string) => 
     throw new Error(`Routine not found for class ${classId} and section ${section}`);
   }
 
-  return routine;
+  const supervisor = await ClassSectionSupervisor.findOne({
+    classId,
+    section: section.toUpperCase(),
+  }).select('teacherId teacherName').lean(); // null if not found
+
+  return {  
+    routine,
+    supervisor: supervisor || null,
+  };
 };
 
 
@@ -79,7 +88,7 @@ const updatePeriodInClassRoutine = async (
   if (masterIndex === -1) throw new Error(`Master period ${periodNumber} not found`);
 
   routine.periods[masterIndex] = {
-    ...routine.periods[masterIndex].toObject(),
+    ...(routine.periods[masterIndex] as any).toObject(),
     ...updateData, // Only name, startTime, endTime, isBreak
   };
 
@@ -195,6 +204,10 @@ const addOrUpdateSubjectInRoutine = async (payload: AddSubjectToRoutinePayload) 
 
 
 const addOrUpdateManySubjectsInRoutine = async (payload: ManyRoutinePayload) => {
+
+  console.log("payload ===>>> ", payload);
+  
+
   const {
     schoolId,
     classId,
@@ -207,7 +220,10 @@ const addOrUpdateManySubjectsInRoutine = async (payload: ManyRoutinePayload) => 
   } = payload;
 
   if (!schoolId || !classId || !section) {
+
+    console.log("schoolId, classId and section are required");
     throw new AppError(httpStatus.BAD_REQUEST, "schoolId, classId and section are required");
+
   }
 
   const session = await mongoose.startSession();
@@ -219,6 +235,7 @@ const addOrUpdateManySubjectsInRoutine = async (payload: ManyRoutinePayload) => 
 
     // Fetch existing class routine
     const classRoutine = await ClassRoutine.findOne({
+      schoolId: schoolObjectId,
       classId: classObjectId,
       section: section.toUpperCase(),
     }).session(session);
@@ -243,6 +260,7 @@ const addOrUpdateManySubjectsInRoutine = async (payload: ManyRoutinePayload) => 
       };
 
       const existingMaster = classRoutine.periods.find(per => per.periodNumber === p.periodNumber);
+
       if (!existingMaster) {
         classRoutine.periods.push(periodData);
       } else {
@@ -254,7 +272,9 @@ const addOrUpdateManySubjectsInRoutine = async (payload: ManyRoutinePayload) => 
 
       // Sync with daily routines
       classRoutine.routines.forEach(dayRoutine => {
+
         const existingDayPeriod = dayRoutine.periods.find(dp => dp.periodNumber === p.periodNumber);
+
         if (!existingDayPeriod) {
           dayRoutine.periods.push({
             periodNumber: p.periodNumber,
@@ -280,11 +300,13 @@ const addOrUpdateManySubjectsInRoutine = async (payload: ManyRoutinePayload) => 
       const { day, periodNumber, subjectId, subjectName, teacherId, teacherName } = r;
 
       const dayRoutine = classRoutine.routines.find(d => d.day.toLowerCase() === day.toLowerCase());
+
       if (!dayRoutine) {
         throw new AppError(httpStatus.BAD_REQUEST, `Day "${day}" does not exist`);
       }
 
       const period = dayRoutine.periods.find(p => p.periodNumber === periodNumber);
+
       if (!period) {
         throw new AppError(httpStatus.BAD_REQUEST, `Period ${periodNumber} not found on ${day}`);
       }
@@ -293,6 +315,7 @@ const addOrUpdateManySubjectsInRoutine = async (payload: ManyRoutinePayload) => 
       period.subjectId = new mongoose.Types.ObjectId(subjectId);
       period.subjectName = subjectName;
       period.teacherId = teacherId ? new mongoose.Types.ObjectId(teacherId) : null;
+
       (period as any).teacherName = teacherName ?? null;
 
       // Assign teacher to subject (updates AssignedSubjectTeacher table)
@@ -324,7 +347,10 @@ const addOrUpdateManySubjectsInRoutine = async (payload: ManyRoutinePayload) => 
           className,
           section,
         },
-        { role: "admin", schoolId },
+        {
+          role: USER_ROLE.school,
+          schoolId: schoolId,
+        },
         session
       );
     }
@@ -351,6 +377,8 @@ const addOrUpdateManySubjectsInRoutine = async (payload: ManyRoutinePayload) => 
 
     return classRoutine;
   } catch (error) {
+
+    console.log({error})
     await session.abortTransaction();
     session.endSession();
     throw error;
@@ -430,7 +458,7 @@ const getUniqueSubjectsOfClassRoutine = async (
   allTeachers.forEach((t) => {
     const key = t.subjectId.toString();
     if (!teacherMap.has(key)) teacherMap.set(key, []);
-    teacherMap.get(key)?.push({ teacherId: t._id.toString(), teacherName: t.userId.name });
+    teacherMap.get(key)?.push({ teacherId: t._id.toString(), teacherName: (t.userId as any).name });
   });
 
   console.log('teacherMap', teacherMap);
@@ -458,81 +486,96 @@ const getUniqueSubjectsOfClassRoutine = async (
 
 
 
-export const getTodayUpcomingClasses = async (
+
+const getTodayUpcomingClasses = async (
   user: TAuthUser,
   query: Record<string, unknown>
 ) => {
-  // auto lowercase day
-  let today = (query.today as string)?.toLowerCase() 
-    || dayjs().format("dddd").toLowerCase();
+  // ------------------------------
+  // DAY + TIME SETUP
+  // ------------------------------
 
-  // auto time if not provided
-  const nowTime = (query.nowTime as string) || dayjs().format("HH:mm");
+  console.log("user", user);
 
-  const upcomingQuery = new AggregationQueryBuilder(query);
 
-  // ========================================================
-  // MATCH STAGE BASED ON USER ROLE
-  // ========================================================
-  let matchStage: any = {};
+  const today =
+    (query.today as string)?.toLowerCase() ||
+    dayjs().format("dddd").toLowerCase();
+
+  // const nowTime =
+  //   (query.nowTime as string) || dayjs().format("HH:mm");
+
+  const todayDate = query.todayDate
+    ? dayjs(query.todayDate as string).format("YYYY-MM-DD")
+    : dayjs().format("YYYY-MM-DD");
+
+  const startOfDay = dayjs(todayDate).startOf("day").toDate();
+  const endOfDay = dayjs(todayDate).endOf("day").toDate();
+
+  // ------------------------------
+  // MATCH LOGIC BASED ON ROLE
+  // ------------------------------
+  let matchStage: any = {
+    schoolId: new mongoose.Types.ObjectId(String(user.mySchoolId)),
+  };
 
   if (user.role === USER_ROLE.teacher) {
     matchStage = {
-      "routines.periods.teacherId": new mongoose.Types.ObjectId(String(user.teacherId)),
+      ...matchStage,
+      // teacherId match will happen after unwind
     };
-  } 
-  else if (user.role === USER_ROLE.student) {
+  } else if (user.role === USER_ROLE.student) {
     const student = await StudentService.findStudent(user.studentId);
 
     matchStage = {
+      ...matchStage,
       classId: new mongoose.Types.ObjectId(String(student.classId)),
       section: student.section,
     };
   }
 
-  // ========================================================
-  // FULL PIPELINE
-  // ========================================================
+  const upcomingQuery = new AggregationQueryBuilder(query);
+
+  // ------------------------------
+  // AGGREGATION PIPELINE
+  // ------------------------------
   const result = await upcomingQuery
     .customPipeline([
-      // -------------------------------------
-      // 1) Match Routine by class or teacher
-      // -------------------------------------
-      {
-        $match: matchStage,
-      },
+      // 1) Match school/class
+      { $match: matchStage },
 
-      // -------------------------------------
       // 2) Unwind routines
-      // -------------------------------------
       { $unwind: "$routines" },
 
-      // -------------------------------------
-      // 3) Filter Today’s Routine
-      // -------------------------------------
-      {
-        $match: { "routines.day": today },
-      },
+      // 3) Match today's day
+      { $match: { "routines.day": today } },
 
-      // -------------------------------------
-      // 4) Unwind periods inside today's routine
-      // -------------------------------------
+      // 4) Unwind periods
       { $unwind: "$routines.periods" },
 
-      // -------------------------------------
-      // 5) Filter upcoming classes (nowTime)
-      // -------------------------------------
-      {
-        $match: {
-          $expr: {
-            $gt: ["$routines.periods.startTime", nowTime],
-          },
-        },
-      },
+      // 5) Teacher-specific match
+      ...(user.role === USER_ROLE.teacher
+        ? [
+            {
+              $match: {
+                "routines.periods.teacherId": new mongoose.Types.ObjectId(
+                  String(user.userId)
+                ),
+              },
+            },
+          ]
+        : []),
 
-      // -------------------------------------
-      // 6) Lookup Subject
-      // -------------------------------------
+      // 6) Filter upcoming periods
+      // {
+      //   $match: {
+      //     $expr: {
+      //       $gt: ["$routines.periods.startTime", nowTime],
+      //     },
+      //   },
+      // },
+
+      // 7) Lookup subject
       {
         $lookup: {
           from: "subjects",
@@ -543,9 +586,7 @@ export const getTodayUpcomingClasses = async (
       },
       { $unwind: { path: "$subject", preserveNullAndEmptyArrays: true } },
 
-      // -------------------------------------
-      // 7) Lookup Teacher
-      // -------------------------------------
+      // 8) Lookup teacher
       {
         $lookup: {
           from: "teachers",
@@ -556,9 +597,7 @@ export const getTodayUpcomingClasses = async (
       },
       { $unwind: { path: "$teacher", preserveNullAndEmptyArrays: true } },
 
-      // -------------------------------------
-      // 8) Lookup Class Info
-      // -------------------------------------
+      // 9) Lookup class info
       {
         $lookup: {
           from: "classes",
@@ -569,16 +608,11 @@ export const getTodayUpcomingClasses = async (
       },
       { $unwind: { path: "$classInfo", preserveNullAndEmptyArrays: true } },
 
-      // -------------------------------------
-      // 9) Count Total Students
-      // -------------------------------------
+      // 10) Count total students
       {
         $lookup: {
           from: "students",
-          let: {
-            classId: "$classId",
-            section: "$section",
-          },
+          let: { classId: "$classId", section: "$section" },
           pipeline: [
             {
               $match: {
@@ -595,29 +629,71 @@ export const getTodayUpcomingClasses = async (
         },
       },
 
-      // -------------------------------------
-      // 10) Final Projection
-      // -------------------------------------
+      // 11) Attendance lookup
+      {
+        $lookup: {
+          from: "attendances",
+          let: {
+            classId: "$classId",
+            section: "$section",
+            periodNumber: "$routines.periods.periodNumber",
+          },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ["$classId", "$$classId"] },
+                    { $eq: ["$section", "$$section"] },
+                    { $eq: ["$periodNumber", "$$periodNumber"] },
+                    { $eq: ["$day", today] },
+                    { $gte: ["$date", startOfDay] },
+                    { $lte: ["$date", endOfDay] },
+                    { $eq: ["$isAttendance", true] },
+                  ],
+                },
+              },
+            },
+          ],
+          as: "attendanceRecords",
+        },
+      },
+
+      // 12) Final projection
       {
         $project: {
           _id: 0,
+          schoolId: 1,
           classId: 1,
+          className: "$classInfo.className",
           section: 1,
+
           day: "$routines.day",
           periodNumber: "$routines.periods.periodNumber",
-          startTime: "$routines.periods.startTime",
-          endTime: "$routines.periods.endTime",
-
+          subjectId: { $ifNull: ["$subject._id", "$routines.periods.subjectId"] },
           subjectName: {
             $ifNull: ["$subject.subjectName", "$routines.periods.subjectName"],
           },
 
-          teacherName: "$teacher.name",
 
-          className: "$classInfo.className",
+          startTime: "$routines.periods.startTime",
+          endTime: "$routines.periods.endTime",
+          totalStudents: { $size: "$matchedStudents" },
+
           levelName: "$classInfo.levelName",
 
-          totalStudents: { $size: "$matchedStudents" },
+
+          // Attendance info
+          isTakedAttendance: { $gt: [{ $size: "$attendanceRecords" }, 0] },
+
+          // Attendance _id if exists
+          attendanceId: {
+            $cond: [
+              { $gt: [{ $size: "$attendanceRecords" }, 0] },
+              { $arrayElemAt: ["$attendanceRecords._id", 0] },
+              "",
+            ],
+          },
         },
       },
     ])
@@ -625,11 +701,816 @@ export const getTodayUpcomingClasses = async (
     .paginate()
     .execute(ClassRoutine);
 
-  // Count for pagination
+  // ------------------------------
+  // Meta for pagination
+  // ------------------------------
   const meta = await upcomingQuery.countTotal(ClassRoutine);
 
   return { meta, result };
 };
+
+
+const getTodayTeacherClasses = async (user: TAuthUser, query: Record<string, unknown> = {}) => {
+  console.log(user);
+  if (!user.teacherId || !user.mySchoolId) throw new AppError(400, "TeacherId or schoolId missing");
+
+  const today = (query.today as string)?.toLowerCase() || dayjs().format("dddd").toLowerCase();
+  const nowTime = (query.nowTime as string) || dayjs().format("HH:mm");
+
+  const result = await ClassRoutine.aggregate([
+    // Only routines for this school
+    { 
+      $match: { 
+        schoolId: new mongoose.Types.ObjectId(String(user.mySchoolId))
+      } 
+    },
+
+    // Unwind routines
+    { $unwind: "$routines" },
+
+    // Match today's day
+    { $match: { "routines.day": today } },
+
+    // Unwind periods
+    { $unwind: "$routines.periods" },
+
+    // Match teacher and upcoming time
+    { 
+      $match: { 
+        "routines.periods.teacherId": new mongoose.Types.ObjectId(String(user.teacherId)),
+        $expr: { $gt: ["$routines.periods.startTime", nowTime] }
+      }
+    },
+
+    // Lookup class info
+    {
+      $lookup: {
+        from: "classes",
+        localField: "classId",
+        foreignField: "_id",
+        as: "classInfo",
+      },
+    },
+    { $unwind: { path: "$classInfo", preserveNullAndEmptyArrays: true } },
+
+    // Lookup subject info
+    {
+      $lookup: {
+        from: "subjects",
+        localField: "routines.periods.subjectId",
+        foreignField: "_id",
+        as: "subject",
+      },
+    },
+    { $unwind: { path: "$subject", preserveNullAndEmptyArrays: true } },
+
+    // Final projection
+    {
+      $project: {
+        _id: 0,
+        classId: 1,
+        section: 1,
+        day: "$routines.day",
+        periodNumber: "$routines.periods.periodNumber",
+        startTime: "$routines.periods.startTime",
+        endTime: "$routines.periods.endTime",
+        subjectName: { $ifNull: ["$subject.subjectName", "$routines.periods.subjectName"] },
+        className: "$classInfo.className",
+        levelName: "$classInfo.levelName",
+      },
+    },
+
+    // Sort by startTime
+    { $sort: { startTime: 1 } },
+  ]);
+
+  return result;
+};
+
+
+
+const getTodayClassListByClassAndSection = async (
+  classId: string,
+  section: string,
+  query: Record<string, unknown>,
+  schoolId: string
+) => {
+  // ------------------------------
+  // DAY + DATE SETUP
+  // ------------------------------
+  const today =
+    (query.today as string)?.toLowerCase() ||
+    dayjs().format("dddd").toLowerCase();
+
+  const todayDate = query.todayDate
+    ? dayjs(query.todayDate as string).format("YYYY-MM-DD")
+    : dayjs().format("YYYY-MM-DD");
+
+  const startOfDay = dayjs(todayDate).startOf("day").toDate();
+  const endOfDay = dayjs(todayDate).endOf("day").toDate();
+
+  // ------------------------------
+  // MATCH LOGIC — CLASS + SECTION
+  // ------------------------------
+  const matchStage: any = {
+    schoolId: new mongoose.Types.ObjectId(String(schoolId)),
+    classId: new mongoose.Types.ObjectId(String(classId)),
+    section: section,
+  };
+
+  const classQuery = new AggregationQueryBuilder(query);
+
+  // ------------------------------
+  // AGGREGATION PIPELINE
+  // ------------------------------
+  const result = await classQuery
+    .customPipeline([
+      // 1) Match school, class, section
+      { $match: matchStage },
+
+      // 2) Unwind routines
+      { $unwind: "$routines" },
+
+      // 3) Match today's day
+      { $match: { "routines.day": today } },
+
+      // 4) Unwind periods
+      { $unwind: "$routines.periods" },
+
+      // 5) Filter out periods with no subject
+      {
+        $match: {
+          $expr: { $ne: ["$routines.periods.subjectId", null] },
+        },
+      },
+
+      // 6) Lookup subject
+      {
+        $lookup: {
+          from: "subjects",
+          localField: "routines.periods.subjectId",
+          foreignField: "_id",
+          as: "subject",
+        },
+      },
+      { $unwind: { path: "$subject", preserveNullAndEmptyArrays: true } },
+
+      // 7) Lookup teacher
+      {
+        $lookup: {
+          from: "teachers",
+          localField: "routines.periods.teacherId",
+          foreignField: "_id",
+          as: "teacher",
+        },
+      },
+      { $unwind: { path: "$teacher", preserveNullAndEmptyArrays: true } },
+
+      // 8) Lookup class info
+      {
+        $lookup: {
+          from: "classes",
+          localField: "classId",
+          foreignField: "_id",
+          as: "classInfo",
+        },
+      },
+      { $unwind: { path: "$classInfo", preserveNullAndEmptyArrays: true } },
+
+      // 9) Count total students in this class+section
+      {
+        $lookup: {
+          from: "students",
+          let: { classId: "$classId", section: "$section" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ["$classId", "$$classId"] },
+                    { $eq: ["$section", "$$section"] },
+                  ],
+                },
+              },
+            },
+          ],
+          as: "matchedStudents",
+        },
+      },
+
+      // 10) Find today’s attendance for this class & period
+      {
+        $lookup: {
+          from: "attendances",
+          let: {
+            classId: "$classId",
+            section: "$section",
+            periodNumber: "$routines.periods.periodNumber",
+          },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ["$classId", "$$classId"] },
+                    { $eq: ["$section", "$$section"] },
+                    { $eq: ["$periodNumber", "$$periodNumber"] },
+                    { $eq: ["$day", today] },
+                    { $gte: ["$date", startOfDay] },
+                    { $lte: ["$date", endOfDay] },
+                    { $eq: ["$isAttendance", true] },
+                  ],
+                },
+              },
+            },
+          ],
+          as: "attendanceRecords",
+        },
+      },
+
+      // 11) Final data shape
+      {
+        $project: {
+          _id: 0,
+          schoolId: 1,
+          classId: 1,
+          className: "$classInfo.className",
+          levelName: "$classInfo.levelName",
+          section: 1,
+
+          day: "$routines.day",
+          periodNumber: "$routines.periods.periodNumber",
+          startTime: "$routines.periods.startTime",
+          endTime: "$routines.periods.endTime",
+
+          subjectId: { $ifNull: ["$subject._id", "$routines.periods.subjectId"] },
+          subjectName: {
+            $ifNull: ["$subject.subjectName", "$routines.periods.subjectName"],
+          },
+
+          teacherId: "$teacher._id",
+          teacherName: "$teacher.name",
+
+          totalStudents: { $size: "$matchedStudents" },
+
+          // Attendance check
+          isTakedAttendance: { $gt: [{ $size: "$attendanceRecords" }, 0] },
+
+          // return attendanceId if exists
+          attendanceId: {
+            $cond: [
+              { $gt: [{ $size: "$attendanceRecords" }, 0] },
+              { $arrayElemAt: ["$attendanceRecords._id", 0] },
+              "",
+            ],
+          },
+        },
+      },
+    ])
+    .sort()
+    .paginate()
+    .execute(ClassRoutine);
+
+  // Pagination meta
+  const meta = await classQuery.countTotal(ClassRoutine);
+
+  return { meta, result };
+};
+
+
+const getHistoryClassListOfSpecificClassAndSectionByDate = async (
+  classId: string,
+  section: string,
+  date: string, // "YYYY-MM-DD"
+  schoolId: string
+) => {
+  const targetDay = dayjs(date).format("dddd").toLowerCase();
+  const targetDateStart = dayjs(date).startOf("day").toDate();
+  const targetDateEnd = dayjs(date).endOf("day").toDate();
+
+  const matchStage: any = {
+    schoolId: new mongoose.Types.ObjectId(String(schoolId)),
+    classId: new mongoose.Types.ObjectId(String(classId)),
+    section,
+  };
+
+  const classQuery = new AggregationQueryBuilder({});
+
+  const result = await classQuery
+    .customPipeline([
+      // 1) Match school, class, section
+      { $match: matchStage },
+
+      // 2) Unwind routines
+      { $unwind: "$routines" },
+
+      // 3) Match day
+      { $match: { "routines.day": targetDay } },
+
+      // 4) Unwind periods
+      { $unwind: "$routines.periods" },
+
+      // 5) Lookup subject
+      {
+        $lookup: {
+          from: "subjects",
+          localField: "routines.periods.subjectId",
+          foreignField: "_id",
+          as: "subject",
+        },
+      },
+      { $unwind: { path: "$subject", preserveNullAndEmptyArrays: false } }, // subjectId=null হলে skip হবে
+
+      // 6) Lookup teacher
+      {
+        $lookup: {
+          from: "teachers",
+          localField: "routines.periods.teacherId",
+          foreignField: "_id",
+          as: "teacher",
+        },
+      },
+      { $unwind: { path: "$teacher", preserveNullAndEmptyArrays: true } },
+
+      // 7) Lookup class info
+      {
+        $lookup: {
+          from: "classes",
+          localField: "classId",
+          foreignField: "_id",
+          as: "classInfo",
+        },
+      },
+      { $unwind: { path: "$classInfo", preserveNullAndEmptyArrays: true } },
+
+      // 8) Count total students
+      {
+        $lookup: {
+          from: "students",
+          let: { classId: "$classId", section: "$section" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ["$classId", "$$classId"] },
+                    { $eq: ["$section", "$$section"] },
+                  ],
+                },
+              },
+            },
+          ],
+          as: "matchedStudents",
+        },
+      },
+
+      // 9) Lookup attendance
+      {
+        $lookup: {
+          from: "attendances",
+          let: {
+            classId: "$classId",
+            section: "$section",
+            periodNumber: "$routines.periods.periodNumber",
+          },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ["$classId", "$$classId"] },
+                    { $eq: ["$section", "$$section"] },
+                    { $eq: ["$periodNumber", "$$periodNumber"] },
+                    { $eq: ["$day", targetDay] },
+                    { $gte: ["$date", targetDateStart] },
+                    { $lte: ["$date", targetDateEnd] },
+                  ],
+                },
+              },
+            },
+          ],
+          as: "attendanceRecords",
+        },
+      },
+
+      // 10) Final projection
+      {
+        $project: {
+          _id: 0,
+          schoolId: 1,
+          classId: 1,
+          className: "$classInfo.className",
+          levelName: "$classInfo.levelName",
+          section: 1,
+          day: "$routines.day",
+          periodNumber: "$routines.periods.periodNumber",
+          startTime: "$routines.periods.startTime",
+          endTime: "$routines.periods.endTime",
+          subjectId: "$subject._id",
+          subjectName: "$subject.subjectName",
+          teacherId: "$teacher._id",
+          teacherName: "$teacher.name",
+          totalStudents: { $size: "$matchedStudents" },
+
+          isTakedAttendance: { $gt: [{ $size: "$attendanceRecords" }, 0] },
+
+          attendanceId: {
+            $cond: [
+              { $gt: [{ $size: "$attendanceRecords" }, 0] },
+              { $arrayElemAt: ["$attendanceRecords._id", 0] },
+              "",
+            ],
+          },
+
+          totalPresentStudents: {
+            $cond: [
+              { $gt: [{ $size: "$attendanceRecords" }, 0] },
+              { $size: { $arrayElemAt: ["$attendanceRecords.presentStudents", 0] } },
+              0,
+            ],
+          },
+          totalAbsentStudents: {
+            $cond: [
+              { $gt: [{ $size: "$attendanceRecords" }, 0] },
+              { $size: { $arrayElemAt: ["$attendanceRecords.absentStudents", 0] } },
+              0,
+            ],
+          },
+        },
+      },
+    ])
+    .sort({ "startTime": 1 })
+    .paginate()
+    .execute(ClassRoutine);
+
+  const meta = await classQuery.countTotal(ClassRoutine);
+
+  return { meta, result };
+};
+
+
+
+const getTodayClassListForSchoolAdmin = async (
+  schoolId: string,
+  query: Record<string, unknown>
+) => {
+  if (!mongoose.Types.ObjectId.isValid(schoolId)) {
+    throw new Error("Invalid schoolId");
+  }
+
+  const schoolObjectId = new mongoose.Types.ObjectId(schoolId);
+
+  // ------------------------------
+  // DAY + DATE SETUP
+  // ------------------------------
+  const today =
+    (query.today as string)?.toLowerCase() ||
+    dayjs().format("dddd").toLowerCase();
+
+  const todayDate = query.todayDate
+    ? dayjs(query.todayDate as string).format("YYYY-MM-DD")
+    : dayjs().format("YYYY-MM-DD");
+
+  const startOfDay = dayjs(todayDate).startOf("day").toDate();
+  const endOfDay = dayjs(todayDate).endOf("day").toDate();
+
+  // ------------------------------
+  // MATCH LOGIC — SCHOOL ONLY
+  // ------------------------------
+  const matchStage: any = {
+    schoolId: schoolObjectId,
+  };
+
+  const classQuery = new AggregationQueryBuilder(query);
+
+  // ------------------------------
+  // AGGREGATION PIPELINE
+  // ------------------------------
+  const result = await classQuery
+    .customPipeline([
+      // 1) Match school
+      { $match: matchStage },
+
+      // 2) Unwind routines
+      { $unwind: "$routines" },
+
+      // 3) Match today's day
+      { $match: { "routines.day": today } },
+
+      // 4) Unwind periods
+      { $unwind: "$routines.periods" },
+
+      // 5) Lookup subject
+      {
+        $lookup: {
+          from: "subjects",
+          localField: "routines.periods.subjectId",
+          foreignField: "_id",
+          as: "subject",
+        },
+      },
+      { $unwind: { path: "$subject", preserveNullAndEmptyArrays: true } },
+
+      // 6) Lookup teacher
+      {
+        $lookup: {
+          from: "teachers",
+          localField: "routines.periods.teacherId",
+          foreignField: "_id",
+          as: "teacher",
+        },
+      },
+      { $unwind: { path: "$teacher", preserveNullAndEmptyArrays: true } },
+
+      // 7) Lookup class info
+      {
+        $lookup: {
+          from: "classes",
+          localField: "classId",
+          foreignField: "_id",
+          as: "classInfo",
+        },
+      },
+      { $unwind: { path: "$classInfo", preserveNullAndEmptyArrays: true } },
+
+      // 8) Count total students in class+section
+      {
+        $lookup: {
+          from: "students",
+          let: { classId: "$classId", section: "$section" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ["$classId", "$$classId"] },
+                    { $eq: ["$section", "$$section"] },
+                  ],
+                },
+              },
+            },
+          ],
+          as: "matchedStudents",
+        },
+      },
+
+      // 9) Attendance lookup
+      {
+        $lookup: {
+          from: "attendances",
+          let: {
+            classId: "$classId",
+            section: "$section",
+            periodNumber: "$routines.periods.periodNumber",
+          },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ["$classId", "$$classId"] },
+                    { $eq: ["$section", "$$section"] },
+                    { $eq: ["$periodNumber", "$$periodNumber"] },
+                    { $eq: ["$day", today] },
+                    { $gte: ["$date", startOfDay] },
+                    { $lte: ["$date", endOfDay] },
+                    { $eq: ["$isAttendance", true] },
+                  ],
+                },
+              },
+            },
+          ],
+          as: "attendanceRecords",
+        },
+      },
+
+      // 10) Final projection
+      {
+        $project: {
+          _id: 0,
+          schoolId: 1,
+          classId: 1,
+          className: "$classInfo.className",
+          levelName: "$classInfo.levelName",
+          section: 1,
+
+          day: "$routines.day",
+          periodNumber: "$routines.periods.periodNumber",
+          startTime: "$routines.periods.startTime",
+          endTime: "$routines.periods.endTime",
+
+          subjectId: { $ifNull: ["$subject._id", "$routines.periods.subjectId"] },
+          subjectName: {
+            $ifNull: ["$subject.subjectName", "$routines.periods.subjectName"],
+          },
+
+          teacherId: "$teacher._id",
+          teacherName: "$teacher.name",
+
+          totalStudents: { $size: "$matchedStudents" },
+
+          isTakedAttendance: { $gt: [{ $size: "$attendanceRecords" }, 0] },
+
+          attendanceId: {
+            $cond: [
+              { $gt: [{ $size: "$attendanceRecords" }, 0] },
+              { $arrayElemAt: ["$attendanceRecords._id", 0] },
+              "",
+            ],
+          },
+        },
+      },
+
+      // 11) Filter out periods where subjectId is null
+      { $match: { subjectId: { $ne: null } } },
+    ])
+    .sort()
+    .paginate()
+    .execute(ClassRoutine);
+
+  // ------------------------------
+  // Pagination meta
+  // ------------------------------
+  const meta = await classQuery.countTotal(ClassRoutine);
+
+  return { meta, result };
+};
+
+
+
+const getHistoryClassListForSchoolAdminByDate = async (
+  schoolId: string,
+  date: string, // "YYYY-MM-DD"
+  query: Record<string, unknown> = {}
+) => {
+  if (!mongoose.Types.ObjectId.isValid(schoolId)) {
+    throw new Error("Invalid schoolId");
+  }
+
+  const schoolObjectId = new mongoose.Types.ObjectId(schoolId);
+
+  const targetDay = dayjs(date).format("dddd").toLowerCase();
+  const targetDateStart = dayjs(date).startOf("day").toDate();
+  const targetDateEnd = dayjs(date).endOf("day").toDate();
+
+  const matchStage: any = {
+    schoolId: schoolObjectId,
+  };
+
+  const classQuery = new AggregationQueryBuilder(query);
+
+  const result = await classQuery
+    .customPipeline([
+      // 1) Match school
+      { $match: matchStage },
+
+      // 2) Unwind routines
+      { $unwind: "$routines" },
+
+      // 3) Match day
+      { $match: { "routines.day": targetDay } },
+
+      // 4) Unwind periods
+      { $unwind: "$routines.periods" },
+
+      // 5) Lookup subject
+      {
+        $lookup: {
+          from: "subjects",
+          localField: "routines.periods.subjectId",
+          foreignField: "_id",
+          as: "subject",
+        },
+      },
+      { $unwind: { path: "$subject", preserveNullAndEmptyArrays: false } }, // skip if subjectId is null
+
+      // 6) Lookup teacher
+      {
+        $lookup: {
+          from: "teachers",
+          localField: "routines.periods.teacherId",
+          foreignField: "_id",
+          as: "teacher",
+        },
+      },
+      { $unwind: { path: "$teacher", preserveNullAndEmptyArrays: true } },
+
+      // 7) Lookup class info
+      {
+        $lookup: {
+          from: "classes",
+          localField: "classId",
+          foreignField: "_id",
+          as: "classInfo",
+        },
+      },
+      { $unwind: { path: "$classInfo", preserveNullAndEmptyArrays: true } },
+
+      // 8) Count total students
+      {
+        $lookup: {
+          from: "students",
+          let: { classId: "$classId", section: "$section" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ["$classId", "$$classId"] },
+                    { $eq: ["$section", "$$section"] },
+                  ],
+                },
+              },
+            },
+          ],
+          as: "matchedStudents",
+        },
+      },
+
+      // 9) Lookup attendance
+      {
+        $lookup: {
+          from: "attendances",
+          let: {
+            classId: "$classId",
+            section: "$section",
+            periodNumber: "$routines.periods.periodNumber",
+          },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ["$classId", "$$classId"] },
+                    { $eq: ["$section", "$$section"] },
+                    { $eq: ["$periodNumber", "$$periodNumber"] },
+                    { $eq: ["$day", targetDay] },
+                    { $gte: ["$date", targetDateStart] },
+                    { $lte: ["$date", targetDateEnd] },
+                  ],
+                },
+              },
+            },
+          ],
+          as: "attendanceRecords",
+        },
+      },
+
+      // 10) Final projection
+      {
+        $project: {
+          _id: 0,
+          schoolId: 1,
+          classId: 1,
+          className: "$classInfo.className",
+          levelName: "$classInfo.levelName",
+          section: 1,
+          day: "$routines.day",
+          periodNumber: "$routines.periods.periodNumber",
+          startTime: "$routines.periods.startTime",
+          endTime: "$routines.periods.endTime",
+          subjectId: "$subject._id",
+          subjectName: "$subject.subjectName",
+          teacherId: "$teacher._id",
+          teacherName: "$teacher.name",
+          totalStudents: { $size: "$matchedStudents" },
+
+          isTakedAttendance: { $gt: [{ $size: "$attendanceRecords" }, 0] },
+
+          attendanceId: {
+            $cond: [
+              { $gt: [{ $size: "$attendanceRecords" }, 0] },
+              { $arrayElemAt: ["$attendanceRecords._id", 0] },
+              "",
+            ],
+          },
+
+          totalPresentStudents: {
+            $cond: [
+              { $gt: [{ $size: "$attendanceRecords" }, 0] },
+              { $size: { $arrayElemAt: ["$attendanceRecords.presentStudents", 0] } },
+              0,
+            ],
+          },
+          totalAbsentStudents: {
+            $cond: [
+              { $gt: [{ $size: "$attendanceRecords" }, 0] },
+              { $size: { $arrayElemAt: ["$attendanceRecords.absentStudents", 0] } },
+              0,
+            ],
+          },
+        },
+      },
+    ])
+    .sort()
+    .paginate()
+    .execute(ClassRoutine);
+
+  const meta = await classQuery.countTotal(ClassRoutine);
+
+  return { meta, result };
+};
+
 
 
 
@@ -649,5 +1530,10 @@ export const ClassRoutineService = {
   addOrUpdateSubjectInRoutine,
   getUniqueSubjectsOfClassRoutine,
   addOrUpdateManySubjectsInRoutine,
-  getTodayUpcomingClasses
+  getTodayUpcomingClasses,
+  getTodayTeacherClasses,
+  getTodayClassListByClassAndSection,
+  getHistoryClassListOfSpecificClassAndSectionByDate,
+  getTodayClassListForSchoolAdmin,
+  getHistoryClassListForSchoolAdminByDate
 };

@@ -28,6 +28,7 @@ export interface IDayRoutine {
 
 // ClassRoutine document
 export interface IClassRoutine {
+  schoolId: Types.ObjectId;
   classId: Types.ObjectId;
   section: string;
   periods: IPeriod[];       // Master period template
@@ -94,6 +95,7 @@ export interface ManyRoutinePayload {
   addedStudents?: {
     name: string;
     phoneNumber: string;
+    gender: string;
     fatherPhoneNumber: string;
     motherPhoneNumber: string;
   }[];

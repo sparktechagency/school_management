@@ -10,16 +10,23 @@ const addOrUpdateSupervisor = async (payload: {
   teacherId: string;
   teacherName: string;
 }): Promise<IClassSectionSupervisor> => {
+
+console.log("payload===>>>  ",payload);
+
   const { classId, className, section, teacherId, teacherName } = payload;
 
   // Convert string to ObjectId to match schema/interface
   const classObjectId = new Types.ObjectId(classId);
+
   const teacherObjectId = new Types.ObjectId(teacherId);
+  
   // Check if supervisor already exists for this class + section
   const existingSupervisor = await ClassSectionSupervisor.findOne({
     classId: classObjectId,
     section,
   });
+
+console.log("existingSupervisor===>>> ",existingSupervisor);
 
   if (existingSupervisor) {
     // Update existing supervisor
@@ -38,6 +45,8 @@ const addOrUpdateSupervisor = async (payload: {
     teacherId,
     teacherName,
   });
+
+  console.log("newSupervisor===>>> ",newSupervisor);
 
   return newSupervisor;
 };

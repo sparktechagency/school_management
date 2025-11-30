@@ -244,6 +244,29 @@ const getTerminatedStudentsBySchool = catchAsync(async (req: Request, res: Respo
   }
 );
 
+const getAllSummonedStudentBySchool = catchAsync(async (req: Request, res: Response) => {
+    
+    const { schoolId } = req.user;
+
+    if (!schoolId || typeof schoolId !== 'string') {
+      return sendResponse(res, {
+        statusCode: 400,
+        success: false,
+        message: 'schoolId is required and must be a string',
+      });
+    }
+
+    const terminatedStudents = await StudentService.getAllSummonedStudentBySchool(schoolId);
+
+    sendResponse(res, {
+      statusCode: 200,
+      success: true,
+      message: 'Summoned students retrieved successfully',
+      data: terminatedStudents,
+    });
+  }
+);
+
 export const StudentController = {
   createStudent,
   getMyChildren,
@@ -258,5 +281,6 @@ export const StudentController = {
   terminateStudentByTeacher,
   removeTermination,
   summonStudent,
-  getTerminatedStudentsBySchool
+  getTerminatedStudentsBySchool,
+  getAllSummonedStudentBySchool
 };

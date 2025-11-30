@@ -7,6 +7,11 @@ type TTeacherNote = {
   addTime: Date;
 };
 
+interface ISummonHistory {
+  summonedBy: string;   // User _id
+  summonedAt: Date;
+}
+
 // Termination info type
 type TTermination = {
   terminatedDays: number;
@@ -37,7 +42,7 @@ export interface SummonStudentPayload {
 export type TStudent = {
   userId: ObjectId;
   schoolId: ObjectId;
-  classId: ObjectId;
+  classId: ObjectId | string;
   section: string;
   schoolName: string;
   className: string;
@@ -47,7 +52,14 @@ export type TStudent = {
   isTerminated?: boolean;
   termination?: TTermination | null;
   summoned?: boolean;
-  summonedBy?: ObjectId;
+  lastSummonedAt: Date | null;
+  totalSummoned: number;
+
+  summonedHistory: ISummonHistory[];
+
+  createdAt?: Date;
+  updatedAt?: Date;
+
 };
 
 export type StudentRow = {

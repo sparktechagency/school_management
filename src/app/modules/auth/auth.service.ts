@@ -162,7 +162,7 @@ const verifyOtp = async (token: string, otp: { otp: number }) => {
   }
 
   // school amdin
-  if (user.role === USER_ROLE.schoolAdmin && school?.userId) {
+  if (user.role === USER_ROLE.school && school?.userId) {
     const schoolUser = await User.findById(school.userId);
 
     if (schoolUser) {

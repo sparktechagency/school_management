@@ -20,10 +20,152 @@ import {
     commonStageInAttendance,
     commonStageInAttendanceDetails,
 } from './attendance.helper';
-import { TAttendance } from './attendance.interface';
+import { TAttendance, UpdateAttendancePayload } from './attendance.interface';
 import Attendance from './attendance.model';
 
 const createAttendance = async (
+  payload: Partial<TAttendance>,
+  user: TAuthUser
+) => {
+  // -----------------------------------
+  // 1. Verify Teacher
+  // -----------------------------------
+  const teacher = await TeacherService.findTeacher(user);
+  if (!teacher) throw new AppError(404, "Teacher not found");
+
+  const schoolId = teacher.schoolId;
+
+  // -----------------------------------
+  // 2. Validate Required Fields
+  // -----------------------------------
+  if (!payload.className || !payload.section)
+    throw new AppError(400, "className and section are required");
+
+  if (!payload.day || !payload.periodNumber)
+    throw new AppError(400, "day and periodNumber are required");
+
+  if (!payload.subjectId)
+    throw new AppError(400, "subjectId is required");
+
+  // -----------------------------------
+  // 3. Find Class
+  // -----------------------------------
+  const findClass = await Class.findOne({
+    schoolId,
+    className: payload.className,
+    section: payload.section,
+  });
+
+  if (!findClass) throw new AppError(404, "Class not found");
+
+  // -----------------------------------
+  // 4. Total Students in Class
+  // -----------------------------------
+  const totalStudents = await Student.countDocuments({
+    schoolId,
+    classId: findClass._id,
+    section: payload.section,
+  });
+
+  // -----------------------------------
+  // 5. Normalize present/absent arrays
+  // -----------------------------------
+  const presentIds = (payload.presentStudents ?? []) as string[];
+  const absentIds = (payload.absentStudents ?? []) as string[];
+
+  // Remove duplicates from each list
+  const uniquePresent = [...new Set(presentIds)];
+  const uniqueAbsent = [...new Set(absentIds)];
+
+  // Prevent same student in both lists
+  const conflict = uniquePresent.filter(id => uniqueAbsent.includes(id));
+  if (conflict.length > 0) {
+    throw new AppError(
+      400,
+      `A student cannot be both present and absent. Conflicting IDs: ${conflict.join(", ")}`
+    );
+  }
+
+  // Convert to objectId format
+  const presentStudents = uniquePresent.map(id => ({
+    studentId: new mongoose.Types.ObjectId(id),
+  }));
+
+  const absentStudents = uniqueAbsent.map(id => ({
+    studentId: new mongoose.Types.ObjectId(id),
+  }));
+
+  // -----------------------------------
+  // 6. Normalize Date (00:00 UTC)
+  // -----------------------------------
+  const attendanceDate = new Date(payload.date ?? new Date());
+  attendanceDate.setUTCHours(0, 0, 0, 0);
+
+  // -----------------------------------
+  // 7. Prevent Duplicate Attendance
+  // Same class, same period, same date
+  // -----------------------------------
+  const existingAttendance = await Attendance.findOne({
+    schoolId,
+    classId: findClass._id,
+    section: payload.section,
+    date: attendanceDate,
+    periodNumber: payload.periodNumber,
+    day: payload.day.toLowerCase(),
+  });
+
+  if (existingAttendance) {
+    throw new AppError(409, "Attendance already marked for this period");
+  }
+
+  // -----------------------------------
+  // 8. Create Attendance
+  // -----------------------------------
+  const attendance = await Attendance.create({
+    schoolId,
+    classId: findClass._id,
+    className: payload.className,
+    section: payload.section,
+
+    day: payload.day.toLowerCase(),
+    periodNumber: payload.periodNumber,
+    periodName: payload.periodName,
+
+    subjectId: payload.subjectId,
+    subjectName: payload.subjectName,
+
+    teacherId: payload.teacherId ?? teacher._id,
+    teacherName: payload.teacherName ?? (teacher as any).name,
+
+    startTime: payload.startTime,
+    endTime: payload.endTime,
+
+    totalStudents,
+    presentStudents,
+    absentStudents,
+
+    date: attendanceDate,
+    isAttendance: true,
+  });
+
+  // -----------------------------------
+  // 9. Send Notification
+  // -----------------------------------
+  sendNotification(user, {
+    senderId: user.userId,
+    role: user.role,
+    receiverId: user.mySchoolUserId,
+    message: `${user.name} has marked attendance for ${payload.className} section ${payload.section}`,
+    type: NOTIFICATION_TYPE.ATTENDANCE,
+    linkId: attendance._id,
+    senderName: user.name,
+  });
+
+  return attendance;
+};
+
+
+const createAttendanceMahin = async (
     payload: Partial<TAttendance>,
     user: TAuthUser,
 ) => {
@@ -65,7 +207,7 @@ const createAttendance = async (
         isAttendance: true,
     });
 
-    await ClassSchedule.findByIdAndUpdate(payload.classScheduleId, { isAttendance: true }, { new: true })
+    await ClassSchedule.findByIdAndUpdate((payload as any).classScheduleId, { isAttendance: true }, { new: true })
 
     sendNotification(user, {
         senderId: user.userId,
@@ -79,6 +221,8 @@ const createAttendance = async (
 
     return attendance;
 };
+
+
 
 // const getAttendanceHistory = async (
 //     user: TAuthUser,
@@ -494,6 +638,92 @@ const getAttendanceDetails = async (attendanceId: string, query: Record<string, 
     return result;
 };
 
+const getAttendanceStudentListWithCounts = async (attendanceId: string) => {
+  if (!mongoose.Types.ObjectId.isValid(attendanceId)) {
+    throw new Error("Invalid attendanceId");
+  }
+
+  const objectId = new mongoose.Types.ObjectId(attendanceId);
+
+  // -------------------------------
+  // 1. Load attendance first
+  // -------------------------------
+  const attendance = await Attendance.findById(objectId);
+  if (!attendance) throw new Error("Attendance not found");
+
+
+  // -------------------------------
+  // 2. Fetch students + their User info
+  // -------------------------------
+  const students = await Student.aggregate([
+    {
+      $match: {
+        classId: attendance.classId,
+        section: attendance.section,
+      },
+    },
+    {
+      $lookup: {
+        from: "users",
+        localField: "userId",
+        foreignField: "_id",
+        as: "userInfo",
+      },
+    },
+    {
+      $unwind: {
+        path: "$userInfo",
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+    {
+      $project: {
+        _id: 1,
+        userId: 1,
+        studentName: "$userInfo.name",      // 👈 FETCHED FROM USER MODEL
+        parentsMessage: 1,
+        fatherPhoneNumber: 1,
+        motherPhoneNumber: 1,
+      },
+    },
+  ]);
+
+  // -------------------------------
+  // 3. Attach attendance flag
+  // -------------------------------
+  const studentList = students.map((student) => {
+    const isPresent = attendance.presentStudents.some((s) =>
+      (s as any).studentId.equals(student._id)
+    );
+
+    return {
+      studentId: student._id,
+      userId: student.userId,
+      studentName: student.studentName || "Unknown",
+      parentMessage: student.parentsMessage,
+      fatherPhoneNumber: student.fatherPhoneNumber,
+      motherPhoneNumber: student.motherPhoneNumber,
+      isAttendance: isPresent,
+    };
+  });
+
+  // -------------------------------
+  // 4. Count data
+  // -------------------------------
+  const totalStudents = studentList.length;
+  const totalPresentStudents = studentList.filter((s) => s.isAttendance).length;
+  const totalAbsentStudents = totalStudents - totalPresentStudents;
+
+  return {
+    totalStudents,
+    totalPresentStudents,
+    totalAbsentStudents,
+    studentList,
+  };
+};
+
+
+
 const getAttendanceCount = async (
     user: TAuthUser,
     query: Record<string, unknown>,
@@ -540,6 +770,45 @@ const getAttendanceCount = async (
     };
 };
 
+
+const updateAttendanceById = async (
+  attendanceId: string,
+  payload: UpdateAttendancePayload,
+) => {
+  if (!mongoose.Types.ObjectId.isValid(attendanceId)) {
+    throw new AppError(400, "Invalid attendance ID");
+  }
+
+  const attendance = await Attendance.findById(attendanceId);
+  if (!attendance) throw new AppError(404, "Attendance not found");
+
+  // Convert string IDs to ObjectId for MongoDB
+  const presentStudents = (payload.presentStudents || []).map((id) => ({
+    studentId: new mongoose.Types.ObjectId(id),
+  }));
+  const absentStudents = (payload.absentStudents || []).map((id) => ({
+    studentId: new mongoose.Types.ObjectId(id),
+  }));
+
+  // Update attendance fields
+  attendance.presentStudents = presentStudents;
+  attendance.absentStudents = absentStudents;
+  attendance.isAttendance = true;
+
+  // Optional: recalculate total students if needed
+  const totalStudents = await Student.countDocuments({
+    schoolId: attendance.schoolId,
+    classId: attendance.classId,
+    section: attendance.section,
+  });
+
+  attendance.totalStudents = totalStudents;
+
+  await attendance.save();
+
+  return attendance;
+};
+
 export const AttendanceService = {
     createAttendance,
     getAttendanceHistory,
@@ -547,4 +816,6 @@ export const AttendanceService = {
     getMyAttendanceDetails,
     getAttendanceDetails,
     getAttendanceCount,
+    getAttendanceStudentListWithCounts,
+    updateAttendanceById
 };

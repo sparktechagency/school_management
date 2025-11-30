@@ -7,7 +7,7 @@ import { ClassRoutine } from "../classRoutine/classRoutine.model";
 
 
 
-const assignTeacherToSubject = async (payload: AssignTeacherPayload) => {
+const assignTeacherToSubject = async (payload: AssignTeacherPayload, session: mongoose.ClientSession) => {
   const {
     schoolId,
     classId,
@@ -26,8 +26,8 @@ const assignTeacherToSubject = async (payload: AssignTeacherPayload) => {
     );
   }
 
-  const session = await mongoose.startSession();
-  session.startTransaction();
+  // const session = await mongoose.startSession();
+  // session.startTransaction();
 
   try {
     const schoolObjectId = new mongoose.Types.ObjectId(schoolId);
@@ -44,7 +44,7 @@ const assignTeacherToSubject = async (payload: AssignTeacherPayload) => {
       section,
       subjectId: subjectObjectId,
       isActive: true,
-    }).session(session);
+    }).session(session) as any;
 
     if (assignedTeacher) {
       assignedTeacher.teacherId = teacherObjectId as any;
@@ -92,13 +92,10 @@ const assignTeacherToSubject = async (payload: AssignTeacherPayload) => {
 
     await routine.save({ session });
 
-    await session.commitTransaction();
-    session.endSession();
+
 
     return routine;
   } catch (error) {
-    await session.abortTransaction();
-    session.endSession();
     throw error;
   }
 };

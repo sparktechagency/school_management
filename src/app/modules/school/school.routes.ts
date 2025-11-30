@@ -22,18 +22,33 @@ router
     auth(USER_ROLE.admin, USER_ROLE.supperAdmin),
     SchoolController.getSchoolList,
   )
-  .get('/all_students', auth(USER_ROLE.school), SchoolController.getAllStudents)
+
+  .get(
+    "/all",
+    auth(USER_ROLE.admin, USER_ROLE.supperAdmin),
+    SchoolController.getAllSchools
+  )
+
+  .get(
+    '/all_students', 
+    auth(USER_ROLE.school), 
+    SchoolController.getAllStudents
+  )
+
   .get('/teacher', auth(USER_ROLE.school), SchoolController.getTeachers)
+
   .get(
     '/result_of_students',
     auth(USER_ROLE.school),
     SchoolController.getResultOfStudents,
   )
+
   .get(
     '/school_profile',
     auth(USER_ROLE.school),
     SchoolController.getSchoolProfile,
   )
+
   .patch(
     '/update_school_profile',
     auth(USER_ROLE.school),
@@ -44,14 +59,30 @@ router
     parseFormData,
     SchoolController.updateSchoolProfile,
   )
+  
   .patch(
     '/edit_school/:schoolId',
     auth(USER_ROLE.supperAdmin),
     SchoolController.editSchool,
   )
+
+  .patch(
+    '/update_school_block_status/:schoolId',
+    auth(USER_ROLE.admin, USER_ROLE.supperAdmin),
+    SchoolController.updateSchoolBlockStatus,
+  )
+
+  .patch(
+    '/update_school_active_status/:schoolId',
+    auth(USER_ROLE.admin, USER_ROLE.supperAdmin),
+    SchoolController.updateSchoolActiveStatus
+  )
+
+
+
   .delete(
     '/delete_school/:schoolId',
-    auth(USER_ROLE.supperAdmin),
+    auth(USER_ROLE.admin, USER_ROLE.supperAdmin),
     SchoolController.deleteSchool,
   );
 

@@ -23,6 +23,30 @@ router
         ClassRoutineController.getTodayUpcomingClasses
     )
 
+    .get(
+        "/specific_class_section/class_list",
+        auth(USER_ROLE.teacher, USER_ROLE.student, USER_ROLE.school, USER_ROLE.parents),
+        ClassRoutineController.getTodayClassListByClassAndSection
+    )
+
+    .get(
+        "/specific_school/class_list",
+        auth(USER_ROLE.teacher, USER_ROLE.student, USER_ROLE.school, USER_ROLE.parents),
+        ClassRoutineController.getTodayClassListForSchoolAdmin
+    )
+
+    .get(
+        "/classes/history",
+        auth(USER_ROLE.teacher, USER_ROLE.student, USER_ROLE.school, USER_ROLE.parents),
+        ClassRoutineController.getHistoryClassListByClassAndSection
+    )
+
+    .get(
+        "/classes/history/specific_school",
+        auth(USER_ROLE.teacher, USER_ROLE.student, USER_ROLE.school, USER_ROLE.parents),
+        ClassRoutineController.getHistoryClassListForSchoolAdminByDate
+    )
+
     .post(
         "/add_period",
         ClassRoutineController.addPeriodToClassRoutine
@@ -47,6 +71,7 @@ router
 
     .delete(
         "/remove",
+        auth(USER_ROLE.school, USER_ROLE.manager, USER_ROLE.admin),
         ClassRoutineController.removePeriodFromClassRoutine
     )
 

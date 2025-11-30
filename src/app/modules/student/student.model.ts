@@ -16,6 +16,23 @@ const terminationSchema = new Schema(
   { _id: false }
 );
 
+// Summon history schema
+const summonHistorySchema = new Schema(
+  {
+    summonedBy: { 
+      type: Schema.Types.ObjectId, 
+      ref: 'User',
+      required: true 
+    },
+    summonedAt: { 
+      type: Date, 
+      default: Date.now 
+    }
+  },
+  { _id: false }
+);
+
+
 const studentSchema = new Schema<TStudent>(
   {
     userId: {
@@ -23,6 +40,7 @@ const studentSchema = new Schema<TStudent>(
       ref: 'User',
       required: true,
     },
+
     schoolId: {
       type: Schema.Types.ObjectId,
       ref: 'School',
@@ -60,6 +78,7 @@ const studentSchema = new Schema<TStudent>(
     },
     parentsMessage: {
       type: String,
+      default: "",
       trim: true,
     },
     isTerminated: { 
@@ -70,14 +89,24 @@ const studentSchema = new Schema<TStudent>(
       type: terminationSchema, 
       default: null 
     },
+    // Summon system
     summoned: { 
       type: Boolean, 
       default: false 
     },
-    summonedBy: { 
-      type: Schema.Types.ObjectId, 
-      ref: 'User' 
-    }
+    lastSummonedAt: { 
+      type: Date, 
+      default: null 
+    },
+    totalSummoned: { 
+      type: Number, 
+      default: 0 
+    },
+
+    summonedHistory: { 
+      type: [summonHistorySchema], 
+      default: [] 
+    },
   },
   {
     timestamps: true,
@@ -85,4 +114,6 @@ const studentSchema = new Schema<TStudent>(
 );
 
 const Student = model<TStudent>('Student', studentSchema);
+
+
 export default Student;

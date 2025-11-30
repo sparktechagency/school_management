@@ -1,8 +1,9 @@
 import { ClassRoutine } from "./classRoutine.model";
 import normalSchoolPeriods from "../../../data/normalSchoolPeriods.json";
 import { defaultDays } from "../class/class.utils";
+import mongoose from "mongoose";
 
-export const generateRoutineForSection = async (classId: string, section: string) => {
+export const generateRoutineForSection = async (schoolId: string, classId: any, section: string, session: mongoose.ClientSession) => {
   // 1. Master periods (full info)
   const masterPeriods = normalSchoolPeriods.map(p => ({
     periodNumber: p.periodNumber,
@@ -27,6 +28,7 @@ export const generateRoutineForSection = async (classId: string, section: string
 
   // 3. Create ClassRoutine document
   const result = await ClassRoutine.create({
+    schoolId,
     classId,
     section,
     periods: masterPeriods,

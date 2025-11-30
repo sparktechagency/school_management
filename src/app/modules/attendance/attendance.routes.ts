@@ -14,7 +14,13 @@ router
     validateRequest(AttendanceValidation.attendanceSchema),
     AttendanceController.createAttendance,
   )
-  
+
+  .put(
+    '/update/:attendanceId',
+    // auth(USER_ROLE.teacher),  
+    AttendanceController.updateAttendance,
+    )
+
   .get(
     '/history',
     auth(USER_ROLE.teacher, USER_ROLE.school, USER_ROLE.manager),
@@ -39,6 +45,12 @@ router
     AttendanceController.getMyAttendanceDetails,
   )
 
+  .get(
+    '/student_list/:attendanceId',
+    // auth(USER_ROLE.teacher, USER_ROLE.school, USER_ROLE.manager),
+    AttendanceController.getAttendanceStudentList)
+
+    
   .get(
     '/details/:attendanceId',
     auth(USER_ROLE.teacher, USER_ROLE.school, USER_ROLE.manager),

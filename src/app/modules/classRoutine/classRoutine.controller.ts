@@ -13,8 +13,8 @@ const getRoutineByClassAndSection = catchAsync(async (req: Request, res: Respons
         throw new AppError(httpStatus.BAD_REQUEST, 'classId and section are required');
     }
     const routine = await ClassRoutineService.getRoutineByClassAndSection(
-        classId,
-        section
+        classId as any,
+        section as any
     );
 
 
@@ -77,6 +77,7 @@ export const updatePeriodToClassRoutine = catchAsync(async (req: Request, res: R
 
 
 const removePeriodFromClassRoutine = catchAsync(async (req: Request, res: Response) => {
+  
   const { classId, section, periodNumber } = req.body;
 
   if (!classId || !section || periodNumber === undefined) {
@@ -147,7 +148,7 @@ const getUniqueSubjectsOfClassRoutine = catchAsync(
 const getTodayUpcomingClasses = catchAsync(async (req: Request, res: Response) => {
 
       const result = await ClassRoutineService.getTodayUpcomingClasses(
-        req.user,     // authenticated user
+        req.user as any,     // authenticated user
         req.query     // today + nowTime
       );
 
@@ -206,6 +207,94 @@ const getTodayUpcomingClasses = catchAsync(async (req: Request, res: Response) =
   }
 );
 
+const getTodayClassListByClassAndSection = catchAsync(async (req, res) => {
+  const { classId, section, ...rest} = req.query;
+
+  if (!classId || !section) {
+    throw new AppError(httpStatus.BAD_REQUEST, "classId & section required");
+  }
+
+  const schoolId = req.user.mySchoolId; // JWT user
+  const query = rest;
+
+  const data = await ClassRoutineService.getTodayClassListByClassAndSection(
+    classId,
+    section,
+    query,
+    schoolId
+  );
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Today class list fetched successfully",
+    data,
+  });
+});
+
+
+const getTodayClassListForSchoolAdmin = catchAsync(async (req, res) => {
+   const {mySchoolId} = req.user
+
+ 
+
+  const data = await ClassRoutineService.getTodayClassListForSchoolAdmin(
+    mySchoolId as string,
+    req.query
+  );
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Today class list fetched successfully",
+    data,
+  });
+});
+
+
+const getHistoryClassListByClassAndSection = catchAsync(
+  async (req: Request, res: Response) => {
+    const { classId, section, date } = req.query;
+
+    const schoolId = req.user.mySchoolId; 
+
+    const result = await ClassRoutineService.getHistoryClassListOfSpecificClassAndSectionByDate(
+      classId,
+      section,
+      date,
+      schoolId
+    );
+
+    sendResponse(res, {
+      statusCode: httpStatus.OK,
+      success: true,
+      message: "Class history fetched successfully",
+      data: result,
+    });
+  }
+);
+
+
+const getHistoryClassListForSchoolAdminByDate = catchAsync(
+  async (req: Request, res: Response) => {
+    const { date , ...rest} = req.query;
+
+    const schoolId = req.user.mySchoolId; 
+
+    const result = await ClassRoutineService.getHistoryClassListForSchoolAdminByDate(
+      schoolId,
+      date, 
+      req.query
+    );
+
+    sendResponse(res, {
+      statusCode: httpStatus.OK,
+      success: true,
+      message: "Class history of specifc school fetched successfully",
+      data: result,
+    });
+  }
+);
 
 
 
@@ -218,5 +307,9 @@ export const ClassRoutineController = {
     addOrUpdateSubjectInRoutine,
     getUniqueSubjectsOfClassRoutine,
     getTodayUpcomingClasses,
-    addOrUpdateManySubjectsInRoutine
+    addOrUpdateManySubjectsInRoutine,
+    getTodayClassListByClassAndSection,
+    getHistoryClassListByClassAndSection,
+    getTodayClassListForSchoolAdmin,
+    getHistoryClassListForSchoolAdminByDate
 }
