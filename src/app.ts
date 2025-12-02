@@ -35,6 +35,8 @@ app.use(
       'http://localhost:5174',
       'http://classaty.com',
       'https://classaty.com',
+      'http://172.252.13.91:7000',
+      'http://localhost:7000'
     ],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
