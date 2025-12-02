@@ -21,6 +21,8 @@ import {
 } from './students.helper';
 import AppError from '../../utils/AppError';
 import httpStatus from 'http-status';
+import dayjs from 'dayjs';
+import Attendance from '../attendance/attendance.model';
 
 const createStudent = async (
   payload: Partial<TStudent> & { phoneNumber: string; name?: string },
@@ -744,6 +746,120 @@ const getAllSummonedStudentBySchool = async (schoolId: string) => {
 };
 
 
+const getSpecificStudentReport = async (studentId: string) => {
+  // 1. Find student + populate user info
+  const student = await Student.findById(studentId)
+    .populate("userId", " uid name image")
+    .lean();
+
+  if (!student) throw new Error("Student not found");
+
+  const { classId, section, schoolId } = student;
+
+  // 2. Auto detect current month
+  const startOfMonth = dayjs().startOf("month").startOf("day").toDate();
+  const endOfMonth = dayjs().endOf("month").endOf("day").toDate();
+
+  // 3. Fetch all attendance records for this month
+  const attendanceRecords = await Attendance.find({
+    schoolId: new mongoose.Types.ObjectId(schoolId),
+    classId: new mongoose.Types.ObjectId(classId),
+    section: section,
+    date: { $gte: startOfMonth, $lte: endOfMonth },
+  })
+    .populate("presentStudents.studentId")
+    .populate("absentStudents.studentId")
+    .lean();
+
+  if (!attendanceRecords.length) {
+    return {
+      studentUid: (student?.userId as any)?.uid,
+      studentId,
+      name: student.userId?.name || "",
+      image: student.userId?.image || "",
+      totalSummoned: student.totalSummoned || 0,
+      isTerminated: student.isTerminated || false,
+      classId,
+      section,
+      month: dayjs().format("MMMM YYYY"),
+      totalDays: 0,
+      totalPresentDays: 0,
+      totalAbsentDays: 0,
+      dayList: [],
+    };
+  }
+
+  // 4. Group attendance by date
+  const groupedByDate: Record<string, any[]> = {};
+
+  attendanceRecords.forEach((rec) => {
+    const dateKey = dayjs(rec.date).format("YYYY-MM-DD");
+    if (!groupedByDate[dateKey]) groupedByDate[dateKey] = [];
+    groupedByDate[dateKey].push(rec);
+  });
+
+  // 5. Build daily report
+  const dayList: any[] = [];
+
+  for (const dateKey of Object.keys(groupedByDate)) {
+    const dayRecords = groupedByDate[dateKey];
+
+    // Count present periods
+    let presentCount = 0;
+
+    dayRecords.forEach((period) => {
+      const isPresent = period.presentStudents.some(
+        (std: any) => String(std.studentId?._id) === String(studentId)
+      );
+      if (isPresent) presentCount++;
+    });
+
+    // Total periods of the day
+    const totalValidPeriods = dayRecords.length;
+
+    // NEW LOGIC:
+    // Student is present if presentCount >= half of total periods
+    const minimumForPresent = Math.ceil(totalValidPeriods / 2);
+    const isPresentToday = presentCount >= minimumForPresent;
+
+    dayList.push({
+      date: dateKey,
+      day: dayjs(dateKey).format("dddd").toLowerCase(),
+
+      presentPeriods: presentCount,
+      totalPeriods: totalValidPeriods,
+      requiredForPresent: minimumForPresent,
+
+      isPresent: isPresentToday,
+    });
+  }
+
+  // 6. Summary counts
+  const totalPresentDays = dayList.filter((d) => d.isPresent).length;
+  const totalAbsentDays = dayList.filter((d) => !d.isPresent).length;
+
+  // 7. Final response
+  return {
+    studentId,
+    studentUid: (student?.userId as any)?.uid,
+    name: (student.userId as any).name || "",
+    image: (  student.userId as any)?.image || "",
+    totalSummoned: student.totalSummoned || 0,
+    isTerminated: student.isTerminated || false,
+
+    classId,
+    section,
+    month: dayjs().format("MMMM YYYY"),
+
+    totalDays: dayList.length,
+    totalPresentDays,
+    totalAbsentDays,
+
+    dayList,
+  };
+};
+
+
 
 export const StudentService = {
   createStudent,
@@ -762,5 +878,6 @@ export const StudentService = {
   summonStudent,
   getAllStudentsListOfSchool,
   getAllTerminatedStudentsBySchool,
-  getAllSummonedStudentBySchool
+  getAllSummonedStudentBySchool,
+  getSpecificStudentReport
 };

@@ -89,6 +89,12 @@ router
     StudentController.getAllSummonedStudentBySchool
   )
 
+  .get(
+    "/generate_report_data/:studentId",
+    auth(USER_ROLE.admin, USER_ROLE.supperAdmin, USER_ROLE.school, USER_ROLE.teacher, USER_ROLE.student, USER_ROLE.parents),
+    StudentController.getSpecificStudentReport
+  )
+
 
   .patch(
     '/edit_student/:studentId',

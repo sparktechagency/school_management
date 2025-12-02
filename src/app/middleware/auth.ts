@@ -21,6 +21,7 @@ export const auth = (...requestedRole: TUserRole[]) => {
 
     const token = bearerToken?.split(' ')[1];
 
+
     const decoded = decodeToken(
       token,
       config.jwt.access_token as Secret,

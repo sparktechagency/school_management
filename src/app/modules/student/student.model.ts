@@ -46,6 +46,7 @@ const studentSchema = new Schema<TStudent>(
       ref: 'School',
       required: true,
     },
+    
     classId: {
       type: Schema.Types.ObjectId,
       ref: 'Class',

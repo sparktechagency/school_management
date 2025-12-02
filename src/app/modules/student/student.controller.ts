@@ -267,6 +267,19 @@ const getAllSummonedStudentBySchool = catchAsync(async (req: Request, res: Respo
   }
 );
 
+
+
+const getSpecificStudentReport = catchAsync(async (req: Request, res: Response) => {
+  const { studentId } = req.params;
+  const result = await StudentService.getSpecificStudentReport(studentId);
+  sendResponse(res, {
+    success: true,
+    statusCode: httpStatus.OK,
+    message: 'Students fetched successfully',
+    data: result,
+  });
+})
+
 export const StudentController = {
   createStudent,
   getMyChildren,
@@ -282,5 +295,6 @@ export const StudentController = {
   removeTermination,
   summonStudent,
   getTerminatedStudentsBySchool,
-  getAllSummonedStudentBySchool
+  getAllSummonedStudentBySchool,
+  getSpecificStudentReport
 };
