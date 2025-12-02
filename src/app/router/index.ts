@@ -23,6 +23,13 @@ import { TermsRoutes } from '../modules/terms/terms.routes';
 import { UserRoutes } from '../modules/user/user.routes';
 import { FeedbackRoutes } from '../modules/feedback/feedback.routes';
 import { ManagerRoutes } from '../modules/manager/manager.routes';
+import { ClassSectionSupervisorRoutes } from '../modules/classSectionSuperVisor/ClassSectionSupervisor.route';
+import { StudentReportRoutes } from '../modules/studentReport/studentReport.route';
+import { StudentNoteRoutes } from '../modules/studentNote/studentNote.route';
+import { ClassPeriodRoutes } from '../modules/classPeriod/classPeriod.route';
+import { ClassRoutineRoutes } from '../modules/classRoutine/classRoutine.route';
+import { AssignedSubjectTeacherRoutes } from '../modules/assignedSubjectTeacher/assignedSubjectTeacher.route';
+import { AttendancePeriodRoutes } from '../modules/attendancePeriod/attendancePeriod.route';
 
 const router = Router();
 
@@ -53,6 +60,14 @@ const routes: TRoutes[] = [
     route: StudentRoutes,
   },
   {
+    path: '/student_report',
+    route: StudentReportRoutes
+  },
+  {
+    path: '/student_note',
+    route: StudentNoteRoutes
+  },
+  {
     path: '/manager',
     route: ManagerRoutes,
   },
@@ -69,6 +84,23 @@ const routes: TRoutes[] = [
     route: ClassScheduleRoutes,
   },
   {
+    path: '/class_section_supervisor',
+    route: ClassSectionSupervisorRoutes
+  },
+  {
+    path: '/class_routine',
+    route: ClassRoutineRoutes
+  },
+  {
+    path: "/class_period",
+    route: ClassPeriodRoutes
+  },
+
+  {
+    path: "/attendance_period",
+    route: AttendancePeriodRoutes
+  },
+  {
     path: '/attendance',
     route: AttendanceRoutes,
   },
@@ -79,6 +111,11 @@ const routes: TRoutes[] = [
   {
     path: '/assignment_submission',
     route: AssignmentSubmissionRoutes,
+  },
+
+  {
+    path: "/assign_teacher",
+    route: AssignedSubjectTeacherRoutes
   },
   {
     path: '/subject',

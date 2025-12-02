@@ -14,6 +14,7 @@ import School from './school.model';
 const createSchool = async (
   payload: Partial<TSchool> & { phoneNumber: string; name?: string },
 ) => {
+
   const newSchool = await createUserWithProfile({
     phoneNumber: payload.phoneNumber,
     role: USER_ROLE.school,
@@ -22,6 +23,7 @@ const createSchool = async (
 
   return newSchool;
 };
+
 
 const getSchoolList = async (query: Record<string, unknown>) => {
   const schoolListQuery = new AggregationQueryBuilder(query);
@@ -106,6 +108,11 @@ const getSchoolList = async (query: Record<string, unknown>) => {
   return { meta, result };
 };
 
+const getAllSchools = async () => {
+  const result = await School.find().sort({ createdAt: -1 });
+  return result;
+}
+
 const getTeachers = async (user: TAuthUser, query: Record<string, unknown>) => {
   const teachersQuery = new AggregationQueryBuilder(query);
 
@@ -184,6 +191,48 @@ const deleteSchool = async (schoolId: string) => {
     await User.findOneAndDelete({ schoolId }, { session });
   });
   return result;
+};
+
+const updateSchoolBlockStatus = async (schoolId: string) => {
+  // Find the school first
+  const school = await School.findById(schoolId);
+
+  if (!school) {
+    throw new Error('School not found');
+  }
+
+  // Toggle the block status
+  const newStatus = !school.isBlocked;
+
+  // Update the school with the toggled value
+  const updatedSchool = await School.findByIdAndUpdate(
+    schoolId,
+    { isBlocked: newStatus },
+    { new: true }
+  );
+
+  return updatedSchool;
+};
+
+const updateSchoolActiveStatus = async (schoolId: string) => {
+  // Find the school first
+  const school = await School.findById(schoolId);
+
+  if (!school) {
+    throw new Error('School not found');
+  }
+
+  // Toggle the block status
+  const newStatus = !school.isActive;
+
+  // Update the school with the toggled value
+  const updatedSchool = await School.findByIdAndUpdate(
+    schoolId,
+    { isActive: newStatus },
+    { new: true }
+  );
+
+  return updatedSchool;
 };
 
 const getAllStudents = async (
@@ -593,7 +642,7 @@ const updateSchoolProfile = async (
       {
         name: payload.adminName,
         phoneNumber: payload.adminPhone,
-        role: USER_ROLE.schoolAdmin,
+        role: USER_ROLE.school,
         schoolId: user.schoolId,
       },
       {
@@ -621,6 +670,7 @@ const getSchoolProfile = async (user: TAuthUser) => {
 export const SchoolService = {
   createSchool,
   getSchoolList,
+  getAllSchools,
   getTeachers,
   editSchool,
   deleteSchool,
@@ -628,4 +678,6 @@ export const SchoolService = {
   getResultOfStudents,
   updateSchoolProfile,
   getSchoolProfile,
+  updateSchoolBlockStatus,
+  updateSchoolActiveStatus
 };

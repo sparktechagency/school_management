@@ -38,6 +38,35 @@ const getTeacherList = catchAsync(async (req, res) => {
   });
 });
 
+const getAllTeachersOfSchool = catchAsync(async (req, res) => {
+  const result = await TeacherService.getAllTeachersOfSchool(req.params.schoolId);
+  res.status(200).json({
+    success: true,
+    statusCode: 200,
+    message: 'Teacher all fetched successfully',
+    data: result,
+  });
+});
+
+
+
+const getTeachersBySpecificClassAndSection = catchAsync(async (req, res) => {
+  
+  const {studentId} = req.user;
+
+  console.log({studentId})
+
+  const result = await TeacherService.getTeachersBySpecificClassAndSection(studentId);
+
+  res.status(200).json({
+    success: true,
+    statusCode: 200,
+    message: 'get all teachers of specific class and section fetched successfully',
+    data: result,
+  });
+  
+})
+
 const editTeacher = catchAsync(async (req, res) => {
   const result = await TeacherService.editTeacher(
     req.params.teacherUserId,
@@ -65,6 +94,8 @@ export const TeacherController = {
   createTeacher,
   getBaseOnStudent,
   getTeacherList,
+  getAllTeachersOfSchool,
   editTeacher,
   deleteTeacher,
+  getTeachersBySpecificClassAndSection
 };

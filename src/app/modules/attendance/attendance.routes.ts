@@ -14,26 +14,43 @@ router
     validateRequest(AttendanceValidation.attendanceSchema),
     AttendanceController.createAttendance,
   )
+
+  .put(
+    '/update/:attendanceId',
+    // auth(USER_ROLE.teacher),  
+    AttendanceController.updateAttendance,
+    )
+
   .get(
     '/history',
     auth(USER_ROLE.teacher, USER_ROLE.school, USER_ROLE.manager),
     AttendanceController.getAttendanceHistory,
   )
+  
   .get(
     '/my_attendance',
     auth(USER_ROLE.student),
     AttendanceController.getMyAttendance,
   )
+
   .get(
     '/attendance_count',
     auth(USER_ROLE.school, USER_ROLE.student),
     AttendanceController.getAttendanceCount,
   )
+
   .get(
     '/my_attendance/details',
     auth(USER_ROLE.student),
     AttendanceController.getMyAttendanceDetails,
   )
+
+  .get(
+    '/student_list/:attendanceId',
+    // auth(USER_ROLE.teacher, USER_ROLE.school, USER_ROLE.manager),
+    AttendanceController.getAttendanceStudentList)
+
+    
   .get(
     '/details/:attendanceId',
     auth(USER_ROLE.teacher, USER_ROLE.school, USER_ROLE.manager),

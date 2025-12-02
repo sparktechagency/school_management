@@ -38,6 +38,7 @@ async function createStudentWithProfile(
         role: USER_ROLE.student,
         name: payload.data.name,
         uid: payload.uid, // Use pre-generated UID
+        gender: payload.data.gender,
       },
     ],
     { session },
@@ -54,6 +55,7 @@ async function createStudentWithProfile(
   );
 
   const userIdField = `${USER_ROLE.student}Id`; // Fixed: use actual role value
+
   await User.findOneAndUpdate(
     { _id: newUser._id }, // Fixed: proper _id reference
     { [userIdField]: newProfile._id },
@@ -76,6 +78,8 @@ async function createStudentWithProfile(
     type: NOTIFICATION_TYPE.STUDENT,
     linkId: newUser._id,
   });
+
+  console.log("newProfile", newProfile);  
 
   return newProfile;
 }

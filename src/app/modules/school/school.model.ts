@@ -33,6 +33,14 @@ const schoolSchema = new Schema<TSchool>(
       type: String,
       trim: true,
     },
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
+    isBlocked: {
+      type: Boolean,
+      default: false,
+    }
   },
   {
     timestamps: true,

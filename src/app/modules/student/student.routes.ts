@@ -17,6 +17,7 @@ router
     validateRequest(StudentValidation.studentSchema),
     StudentController.createStudent,
   )
+  
   .post(
     '/create_student_using_xlsx',
     auth(
@@ -28,12 +29,39 @@ router
     upload.single('file'),
     StudentController.createStudentUsingXlsx,
   )
+
+  .patch(
+    "/terminate",
+    auth(USER_ROLE.admin, USER_ROLE.supperAdmin, USER_ROLE.school, USER_ROLE.teacher),
+    StudentController.terminateStudentByTeacher
+  )
+
+  .patch(
+    "/terminate/remove/:studentId",
+    auth(USER_ROLE.admin, USER_ROLE.supperAdmin, USER_ROLE.school, USER_ROLE.teacher),
+    StudentController.removeTermination
+  )
+
+  .patch(
+    "/summoned",
+    auth(USER_ROLE.admin, USER_ROLE.supperAdmin, USER_ROLE.school, USER_ROLE.teacher),
+    StudentController.summonStudent
+  )
+
   .get(
     '/student_list',
     auth(USER_ROLE.admin, USER_ROLE.supperAdmin, USER_ROLE.school),
     StudentController.getAllStudents,
   )
+
+  .get(
+    '/specefic_student_list',
+    auth(USER_ROLE.admin, USER_ROLE.supperAdmin, USER_ROLE.school, USER_ROLE.teacher),
+    StudentController.getAllStudentsListOfSpecificClassIdAndSection,
+  )
+
   .get('/my_child', auth(USER_ROLE.parents), StudentController.getMyChildren)
+
   .get(
     '/parents_list',
     auth(USER_ROLE.parents, USER_ROLE.admin, USER_ROLE.supperAdmin),
@@ -49,6 +77,25 @@ router
     auth(USER_ROLE.parents),
     StudentController.selectChild,
   )
+  .get(
+    "/terminated_students",
+    auth(USER_ROLE.admin, USER_ROLE.supperAdmin, USER_ROLE.school),
+    StudentController.getTerminatedStudentsBySchool
+  )
+
+  .get(
+    "/summoned_students",
+    auth(USER_ROLE.admin, USER_ROLE.supperAdmin, USER_ROLE.school),
+    StudentController.getAllSummonedStudentBySchool
+  )
+
+  .get(
+    "/generate_report_data/:studentId",
+    auth(USER_ROLE.admin, USER_ROLE.supperAdmin, USER_ROLE.school, USER_ROLE.teacher, USER_ROLE.student, USER_ROLE.parents),
+    StudentController.getSpecificStudentReport
+  )
+
+
   .patch(
     '/edit_student/:studentId',
     auth(USER_ROLE.admin, USER_ROLE.supperAdmin, USER_ROLE.school),

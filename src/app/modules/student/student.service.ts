@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Secret } from 'jsonwebtoken';
-import mongoose from 'mongoose';
+import mongoose, { mongo } from 'mongoose';
 import config from '../../../config';
 import { USER_ROLE } from '../../constant';
 import { TAuthUser } from '../../interface/authUser';
@@ -12,17 +12,22 @@ import Parents from '../parents/parents.model';
 import School from '../school/school.model';
 import { MulterFile } from '../user/user.controller';
 import User from '../user/user.model';
-import { StudentRow, TStudent } from './student.interface';
+import { RemoveTerminationPayload, StudentRow, SummonStudentPayload, TerminateStudentPayload, TStudent } from './student.interface';
 import Student from './student.model';
 import {
   createStudentWithProfile,
   handleParentUserCreation,
   parseStudentXlsxData,
 } from './students.helper';
+import AppError from '../../utils/AppError';
+import httpStatus from 'http-status';
+import dayjs from 'dayjs';
+import Attendance from '../attendance/attendance.model';
 
 const createStudent = async (
   payload: Partial<TStudent> & { phoneNumber: string; name?: string },
-  user: TAuthUser,
+  user: TAuthUser | { role: string; schoolId: string },
+  mongoSession?: any
 ) => {
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -30,6 +35,7 @@ const createStudent = async (
   try {
     if (user.role === USER_ROLE.school) {
       const findSchool = await School.findById(user.schoolId);
+      if (!findSchool) throw new Error('School not found');
       payload.schoolId = user.schoolId as any;
       payload.schoolName = findSchool?.schoolName;
     }
@@ -246,6 +252,53 @@ const getAllStudents = async (
   const meta = await sudentQuery.countTotal(User);
 
   return { meta, result };
+};
+
+
+//created this funbtion by me
+const getAllStudentsListOfSpecificClassIdAndSection = async (
+  classId: string,
+  section: string,
+) => {
+  // Convert classId to ObjectId
+  const classObjectId = new mongoose.Types.ObjectId(classId);
+
+  // Query students and populate user info
+  const students = await Student.find({
+    classId: classObjectId,
+    section,
+  })
+    .select('userId schoolId classId schoolName className section fatherPhoneNumber motherPhoneNumber parentsMessage isTerminated')
+    .populate({
+      path: 'userId',
+      select: 'name email', // select only the fields you need
+    })
+    .sort({ createdAt: -1 }); // latest students first
+
+  return students;
+};
+
+const getAllStudentsListOfSchool = async (
+  classId: string,
+  section: string,
+) => {
+  // Convert classId to ObjectId
+  const classObjectId = new mongoose.Types.ObjectId(classId);
+
+  // Query students and populate user info
+  const students = await Student.find({
+    classId: classObjectId,
+    section,
+  })
+    .select('userId schoolId classId schoolName className section fatherPhoneNumber motherPhoneNumber isTerminated')
+    .populate({
+      path: 'userId',
+      select: 'name email', // select only the fields you need
+    })
+    .sort({ createdAt: -1 }); // latest students first
+
+  return students;
+
 };
 
 const editStudent = async (id: string, payload: any) => {
@@ -518,6 +571,296 @@ const createStudentWithXlsx = async (file: MulterFile) => {
   return createdStudents;
 };
 
+
+// ==========================
+// TERMINATE STUDENT
+// ==========================
+const terminateStudentByTeacher = async (payload: TerminateStudentPayload) => {
+  const { studentId, terminateBy, terminatedDays} = payload;
+
+ 
+
+  // Validate inputs
+  if (!studentId || !terminateBy || !terminatedDays) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      'studentId, terminateBy, and terminatedDays are required'
+    );
+  }
+
+  // Convert to ObjectId
+  const studentObjectId = new mongoose.Types.ObjectId(studentId);
+  const terminateByObjectId = new mongoose.Types.ObjectId(terminateBy);
+
+  // Find student
+  const student = await Student.findById(studentObjectId);
+  if (!student) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Student not found');
+  }
+
+  // Update student termination info
+  student.isTerminated = true;
+  student.termination = {
+    terminatedDays,
+    terminateBy: terminateBy as any,
+    actionTime: new Date(),
+  };
+
+  await student.save();
+
+  return student;
+};
+
+
+// ==========================
+// REMOVE TERMINATION
+// ==========================
+const removeTermination= async (payload: RemoveTerminationPayload) => {
+  const { studentId, removedBy } = payload;
+
+  // Validate input
+  if (!studentId || !removedBy) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      'studentId and removedBy are required'
+    );
+  }
+
+  // Convert to ObjectId
+  const studentObjectId = new mongoose.Types.ObjectId(studentId);
+  const removedByObjectId = new mongoose.Types.ObjectId(removedBy);
+
+  // Find student
+  const student = await Student.findById(studentObjectId);
+  if (!student) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Student not found');
+  }
+
+  // Remove termination
+  student.isTerminated = false;
+  if (student.termination) {
+    student.termination.removedBy = removedByObjectId as any;
+    student.termination.removedTime = new Date();
+  }
+  student.termination = null;
+
+  await student.save();
+
+  return student;
+};
+
+
+// ==========================
+// SUMMON STUDENT
+// ==========================
+const summonStudent = async (payload: SummonStudentPayload) => {
+
+  const { studentId, summonedBy } = payload;
+
+  // Validate inputs
+  if (!studentId || !summonedBy) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      'studentId and summonedBy are required'
+    );
+  }
+
+  // Convert studentId to ObjectId
+  const studentObjectId = new mongoose.Types.ObjectId(studentId);
+
+  // Find the student
+  const student = await Student.findById(studentObjectId);
+  if (!student) {
+    throw new AppError(httpStatus.NOT_FOUND, 'Student not found');
+  }
+
+  const now = new Date();
+
+  // Update summon fields
+  student.summoned = true;
+  student.lastSummonedAt = now;
+
+  // Increment total summons
+  student.totalSummoned = (student.totalSummoned || 0) + 1;
+
+  // Push to summon history
+  student.summonedHistory.push({
+    summonedBy: new mongoose.Types.ObjectId(summonedBy) as any,
+    summonedAt: now,
+  });
+
+  // Save updated student
+  await student.save();
+
+  return student;
+};
+
+
+const getAllTerminatedStudentsBySchool = async (schoolId: string) => {
+  // Convert schoolId string to ObjectId
+  const schoolObjectId = new mongoose.Types.ObjectId(schoolId);
+
+  const terminatedStudents = await Student.find({
+      isTerminated: true,
+      schoolId: schoolObjectId, // filter by school
+    })
+    .sort({ 'termination.actionTime': -1 }) // latest terminated first
+    .populate('userId', 'name') // populate student name
+    .populate('termination.terminateBy', 'name') // populate who terminated
+    .lean();
+
+  return terminatedStudents.map((student) => ({
+    studentId: student._id,
+    studentName: (student.userId as any)?.name || 'N/A',
+    terminatedBy: (student.termination?.terminateBy as any)?.name || 'N/A',
+    terminatedAt: student.termination?.actionTime || null,
+  }));
+};
+const getAllSummonedStudentBySchool = async (schoolId: string) => {
+  // Convert schoolId to ObjectId
+  const schoolObjectId = new mongoose.Types.ObjectId(schoolId);
+
+  // Fetch summoned students
+  const summonedStudents = await Student.find({
+      summoned: true,
+      schoolId: schoolObjectId,
+    })
+    .sort({ lastSummonedAt: -1 }) // latest summoned first
+    .populate('userId', 'name') // populate student name
+    .populate('summonedHistory.summonedBy', 'name') // populate who summoned
+    .lean();
+
+  return summonedStudents.map((student) => {
+    // Get last summon record
+    const lastHistory =
+      student.summonedHistory?.[student.summonedHistory.length - 1];
+
+    return {
+      studentId: student._id,
+      studentName: (student.userId as any)?.name || 'N/A',
+      lastSummonedBy: (lastHistory?.summonedBy as any)?.name || 'N/A',
+      lastSummonedAt: student.lastSummonedAt || null,
+      totalSummoned: student.totalSummoned || 0,
+    };
+  });
+};
+
+
+const getSpecificStudentReport = async (studentId: string) => {
+  // 1. Find student + populate user info
+  const student = await Student.findById(studentId)
+    .populate("userId", " uid name image")
+    .lean();
+
+  if (!student) throw new Error("Student not found");
+
+  const { classId, section, schoolId } = student;
+
+  // 2. Auto detect current month
+  const startOfMonth = dayjs().startOf("month").startOf("day").toDate();
+  const endOfMonth = dayjs().endOf("month").endOf("day").toDate();
+
+  // 3. Fetch all attendance records for this month
+  const attendanceRecords = await Attendance.find({
+    schoolId: new mongoose.Types.ObjectId(schoolId),
+    classId: new mongoose.Types.ObjectId(classId),
+    section: section,
+    date: { $gte: startOfMonth, $lte: endOfMonth },
+  })
+    .populate("presentStudents.studentId")
+    .populate("absentStudents.studentId")
+    .lean();
+
+  if (!attendanceRecords.length) {
+    return {
+      studentUid: (student?.userId as any)?.uid,
+      studentId,
+      name: student.userId?.name || "",
+      image: student.userId?.image || "",
+      totalSummoned: student.totalSummoned || 0,
+      isTerminated: student.isTerminated || false,
+      classId,
+      section,
+      month: dayjs().format("MMMM YYYY"),
+      totalDays: 0,
+      totalPresentDays: 0,
+      totalAbsentDays: 0,
+      dayList: [],
+    };
+  }
+
+  // 4. Group attendance by date
+  const groupedByDate: Record<string, any[]> = {};
+
+  attendanceRecords.forEach((rec) => {
+    const dateKey = dayjs(rec.date).format("YYYY-MM-DD");
+    if (!groupedByDate[dateKey]) groupedByDate[dateKey] = [];
+    groupedByDate[dateKey].push(rec);
+  });
+
+  // 5. Build daily report
+  const dayList: any[] = [];
+
+  for (const dateKey of Object.keys(groupedByDate)) {
+    const dayRecords = groupedByDate[dateKey];
+
+    // Count present periods
+    let presentCount = 0;
+
+    dayRecords.forEach((period) => {
+      const isPresent = period.presentStudents.some(
+        (std: any) => String(std.studentId?._id) === String(studentId)
+      );
+      if (isPresent) presentCount++;
+    });
+
+    // Total periods of the day
+    const totalValidPeriods = dayRecords.length;
+
+    // NEW LOGIC:
+    // Student is present if presentCount >= half of total periods
+    const minimumForPresent = Math.ceil(totalValidPeriods / 2);
+    const isPresentToday = presentCount >= minimumForPresent;
+
+    dayList.push({
+      date: dateKey,
+      day: dayjs(dateKey).format("dddd").toLowerCase(),
+
+      presentPeriods: presentCount,
+      totalPeriods: totalValidPeriods,
+      requiredForPresent: minimumForPresent,
+
+      isPresent: isPresentToday,
+    });
+  }
+
+  // 6. Summary counts
+  const totalPresentDays = dayList.filter((d) => d.isPresent).length;
+  const totalAbsentDays = dayList.filter((d) => !d.isPresent).length;
+
+  // 7. Final response
+  return {
+    studentId,
+    studentUid: (student?.userId as any)?.uid,
+    name: (student.userId as any).name || "",
+    image: (  student.userId as any)?.image || "",
+    totalSummoned: student.totalSummoned || 0,
+    isTerminated: student.isTerminated || false,
+
+    classId,
+    section,
+    month: dayjs().format("MMMM YYYY"),
+
+    totalDays: dayList.length,
+    totalPresentDays,
+    totalAbsentDays,
+
+    dayList,
+  };
+};
+
+
+
 export const StudentService = {
   createStudent,
   findStudent,
@@ -529,4 +872,12 @@ export const StudentService = {
   getParentsList,
   getParentsDetails,
   createStudentWithXlsx,
+  getAllStudentsListOfSpecificClassIdAndSection,
+  terminateStudentByTeacher,
+  removeTermination,
+  summonStudent,
+  getAllStudentsListOfSchool,
+  getAllTerminatedStudentsBySchool,
+  getAllSummonedStudentBySchool,
+  getSpecificStudentReport
 };

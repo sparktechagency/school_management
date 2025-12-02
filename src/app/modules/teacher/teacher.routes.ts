@@ -24,11 +24,25 @@ router
     auth(USER_ROLE.supperAdmin, USER_ROLE.school, USER_ROLE.admin),
     TeacherController.getTeacherList,
   )
+
+  .get(
+    '/specific_class_section',
+    auth(USER_ROLE.student, USER_ROLE.parents, USER_ROLE.teacher),
+    TeacherController.getTeachersBySpecificClassAndSection
+  )
+  
+  .get(
+    '/all/:schoolId',
+    auth(USER_ROLE.admin, USER_ROLE.supperAdmin, USER_ROLE.school, USER_ROLE.teacher),
+    TeacherController.getAllTeachersOfSchool,
+  )
+
   .patch(
     '/edit_teacher/:teacherUserId',
     auth(USER_ROLE.admin, USER_ROLE.supperAdmin, USER_ROLE.school),
     TeacherController.editTeacher,
   )
+  
   .delete(
     '/delete_teacher/:teacherUserId',
     auth(USER_ROLE.admin, USER_ROLE.supperAdmin, USER_ROLE.school),

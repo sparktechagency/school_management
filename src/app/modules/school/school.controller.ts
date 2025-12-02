@@ -25,6 +25,16 @@ const getSchoolList = catchAsync(async (req, res) => {
   });
 });
 
+const getAllSchools = catchAsync(async (req, res) => {
+  const result = await SchoolService.getAllSchools();
+  sendResponse(res, {
+    success: true,
+    statusCode: httpStatus.OK,
+    message: 'All schools fetched successfully',
+    data: result,
+  });
+});
+
 const getTeachers = catchAsync(async (req, res) => {
   const result = await SchoolService.getTeachers(
     req.user as TAuthUser,
@@ -57,6 +67,26 @@ const deleteSchool = catchAsync(async (req, res) => {
     data: result,
   });
 });
+
+const updateSchoolBlockStatus = catchAsync(async (req, res) => {
+  const result = await SchoolService.updateSchoolBlockStatus(req.params.schoolId);
+  sendResponse(res, {
+    success: true,
+    statusCode: httpStatus.OK,
+    message: 'School block status updated successfully',
+    data: result,
+  });
+});
+
+const updateSchoolActiveStatus = catchAsync(async (req, res) => {
+  const result = await SchoolService.updateSchoolActiveStatus(req.params.schoolId);
+  sendResponse(res, {
+    success: true,
+    statusCode: httpStatus.OK,
+    message: 'School active status updated successfully',
+    data: result,
+  });
+})
 
 const getAllStudents = catchAsync(async (req, res) => {
   const result = await SchoolService.getAllStudents(
@@ -126,6 +156,7 @@ const getSchoolProfile = catchAsync(async (req, res) => {
 export const SchoolController = {
   createSchool,
   getSchoolList,
+  getAllSchools,
   getTeachers,
   editSchool,
   deleteSchool,
@@ -133,4 +164,6 @@ export const SchoolController = {
   getResultOfStudents,
   updateSchoolProfile,
   getSchoolProfile,
+  updateSchoolBlockStatus,
+  updateSchoolActiveStatus
 };

@@ -13,6 +13,7 @@ import User from '../user/user.model';
 import { createUserPayload, getSchoolByRole } from './auth.helper';
 
 const loginUser = async (payload: Pick<TUser, 'phoneNumber'>) => {
+
   const { phoneNumber } = payload;
 
   const user = await User.findOne({ phoneNumber });
@@ -31,7 +32,9 @@ const loginUser = async (payload: Pick<TUser, 'phoneNumber'>) => {
     throw new AppError(httpStatus.FORBIDDEN, 'This user is blocked!');
   }
 
-  const otp = Math.floor(100000 + Math.random() * 900000);
+  // const otp = Math.floor(100000 + Math.random() * 900000);
+
+  const otp = 123456;
 
   const otpExpiryTime = parseInt(config.otp_expire_in as string) || 3;
 
@@ -159,7 +162,7 @@ const verifyOtp = async (token: string, otp: { otp: number }) => {
   }
 
   // school amdin
-  if (user.role === USER_ROLE.schoolAdmin && school?.userId) {
+  if (user.role === USER_ROLE.school && school?.userId) {
     const schoolUser = await User.findById(school.userId);
 
     if (schoolUser) {

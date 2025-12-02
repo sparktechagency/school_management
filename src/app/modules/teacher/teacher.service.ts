@@ -15,11 +15,14 @@ import { createUserWithProfile } from '../user/user.helper';
 import User from '../user/user.model';
 import { TTeacher } from './teacher.interface';
 import Teacher from './teacher.model';
+import Student from '../student/student.model';
+import { ClassRoutine } from '../classRoutine/classRoutine.model';
 
 const createTeacher = async (
   payload: Partial<TTeacher> & { phoneNumber: string; name?: string },
   user: TAuthUser,
 ) => {
+  
   if (user.role === USER_ROLE.school) {
     const findSchool = await School.findById(user.schoolId);
     if (!findSchool)
@@ -35,6 +38,7 @@ const createTeacher = async (
   });
 
   const message = `New teacher ${payload.name} joined ${new Date().toLocaleTimeString()}`;
+
   await sendNotification(user, {
     senderId: teacher._id,
     role: user.role,
@@ -56,7 +60,9 @@ const findTeacher = async (user: TAuthUser) => {
 };
 
 const getBaseOnStudent = async (user: TAuthUser) => {
+  
   const findStudent = await StudentService.findStudent(user.studentId);
+
   if (!findStudent)
     throw new AppError(httpStatus.NOT_FOUND, 'Student not found');
 
@@ -222,6 +228,80 @@ const getTeacherList = async (user: TAuthUser, query: any) => {
   return { meta, result };
 };
 
+
+const getAllTeachersOfSchool = async (schoolId: string) => {
+  const teachers = await Teacher.find({
+    schoolId: new mongoose.Types.ObjectId(schoolId),
+  })
+    .populate({
+      path: "userId",
+      select: "_id name image",
+    })
+    .populate({
+      path: "subjectId",
+      select: "_id subjectName",
+    })
+    .lean();
+
+  return teachers.map((t) => ({
+    userId: (t.userId as any)?._id || null,
+    name: (t.userId as any)?.name || "",
+    image: (t.userId as any)?.image || "",
+    subjectName: (t.subjectId as any)?.subjectName || "",
+  }));
+};
+
+const getTeachersBySpecificClassAndSection = async (studentId: string) => {
+
+  // 1. Find Student
+  const student = await Student.findById(studentId).lean();
+  if (!student) throw new Error("Student not found");
+
+  const { classId, section } = student;
+
+  // 2. Find Routine
+  const routine = await ClassRoutine.findOne({
+    classId: student.classId,
+    section: student.section,
+  }).lean();
+
+  if (!routine) return [];
+
+  // 3. Extract teacher userIds from routine
+  const teacherSet = new Set<string>();
+  routine.routines.forEach((day) => {
+    day.periods.forEach((p) => {
+      if (p.teacherId) teacherSet.add(String(p.teacherId));
+    });
+  });
+
+  const teacherUserIds = [...teacherSet];
+  if (!teacherUserIds.length) return [];
+
+  // 4. Fetch teachers → populate userId + subjectId
+  const teachers = await Teacher.find({
+    userId: { $in: teacherUserIds },
+  })
+    .populate({
+      path: "userId",
+      select: "_id name image",
+    })
+    .populate({
+      path: "subjectId",
+      select: "_id subjectName",
+    })
+    .lean();
+
+  // 5. Format result
+  return teachers.map((t) => ({
+    userId: (t.userId as any)?._id || null,
+    name: ( t.userId as any)?.name || "",
+    image: ( t.userId as any)?.image || "",
+    subjectName: (t.subjectId as any)?.subjectName || "",
+  }));
+};
+
+
 const editTeacher = async (
   teacherId: string,
   payload: Partial<TTeacher & { phoneNumber: string; name?: string }>,
@@ -296,4 +376,6 @@ export const TeacherService = {
   getTeacherList,
   editTeacher,
   deleteTeacher,
+  getAllTeachersOfSchool,
+  getTeachersBySpecificClassAndSection
 };

@@ -5,6 +5,7 @@ import sendResponse from '../../utils/sendResponse';
 import { AssignmentService } from './assignment.service';
 
 const createAssignment = catchAsync(async (req, res) => {
+  
   if (req.file) {
     req.body.fileUrl = req.file.path;
   }

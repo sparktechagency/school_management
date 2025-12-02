@@ -8,119 +8,306 @@ import ClassSchedule from '../classSchedule/classSchedule.model';
 import Result from '../result/result.model';
 import { StudentService } from '../student/student.service';
 import { TeacherService } from '../teacher/teacher.service';
-import { calculateAttendanceRate, getAttendanceRate } from './overview.helper';
+import { calculateAttendanceRate, getAttendanceRate, getAttendanceRateByClassIdAndSection } from './overview.helper';
+import Exam from '../exam/exam.model';
+import { ClassSectionSupervisor } from '../classSectionSuperVisor/classSectionSupervisor.model';
+import Student from '../student/student.model';
+import { ClassSectionSupervisorService } from '../classSectionSuperVisor/classSectionSupervisor.service';
+import { ClassRoutine } from '../classRoutine/classRoutine.model';
+import Class from '../class/class.model';
+
+// const getTeacherHomePageOverview = async (user: TAuthUser) => {
+//   const day = new Date()
+//     .toLocaleString('en-US', { weekday: 'long' })
+//     .toLowerCase();
+
+//   const today = new Date();
+//   today.setUTCHours(0, 0, 0, 0);
+
+//  // Get classes where this teacher is supervisor
+//   const supervisorClasses = await ClassSectionSupervisorService.getMySupervisorsClasses(user.teacherId);
+
+//   // Prepare filters for student counting
+//   const classFilters = supervisorClasses.map((cls: any) => ({
+//     classId: cls.classId,
+//     section: cls.section,
+//   }));
+
+//   const studentMatchFilter =
+//     classFilters.length > 0 ? { $or: classFilters } : { _id: null };
+
+//   // Summoned and Terminated Counts
+//   const [totalSummoned, totalTerminated] = await Promise.all([
+//     Student.countDocuments({
+//       ...studentMatchFilter,
+//       summoned: true
+//     }),
+//     Student.countDocuments({
+//       ...studentMatchFilter,
+//       isTerminated: true
+//     }),
+//   ]);
+
+
+
+
+//   const [todaysClass, todaysAttendanceRate, assignmentDue, totalUpcomingExams] = await Promise.all([
+//     ClassSchedule.countDocuments({ teacherId: user.teacherId, days: day }),
+     
+    
+//     ClassSchedule.aggregate([
+//       {
+//         $match: {
+//           teacherId: new mongoose.Types.ObjectId(String(user.teacherId)),
+//           days: day,
+//         },
+//       },
+//       {
+//         $lookup: {
+//           from: 'attendances',
+//           localField: '_id',
+//           foreignField: 'classScheduleId',
+//           as: 'attendance',
+//         },
+//       },
+//       {
+//         $unwind: {
+//           path: '$attendance',
+//           preserveNullAndEmptyArrays: true,
+//         },
+//       },
+
+//       {
+//         $group: {
+//           _id: '$_id',
+//           totalPresent: { $first: '$attendance.presentStudents' },
+//           totalStudents: { $first: '$attendance.totalStudents' },
+//         },
+//       },
+//       {
+//         $project: {
+//           totalStudents: 1,
+//           totalPresentCount: { $size: { $ifNull: ['$totalPresent', []] } },
+//           attendanceRate: {
+//             $cond: [
+//               { $eq: ['$totalStudents', 0] },
+//               0,
+//               {
+//                 $round: [
+//                   {
+//                     $multiply: [
+//                       {
+//                         $divide: [
+//                           { $size: { $ifNull: ['$totalPresent', []] } },
+//                           '$totalStudents',
+//                         ],
+//                       },
+//                       100,
+//                     ],
+//                   },
+//                   2,
+//                 ],
+//               },
+//             ],
+//           },
+//         },
+//       },
+//       // New stage: Calculate overall attendance rate
+//       {
+//         $group: {
+//           _id: null,
+//           totalPresentSum: { $sum: '$totalPresentCount' },
+//           totalStudentSum: { $sum: '$totalStudents' },
+//         },
+//       },
+//       {
+//         $project: {
+//           _id: 0,
+//           totalPresentSum: 1,
+//           totalStudentSum: 1,
+//           overallAttendanceRate: {
+//             $cond: [
+//               { $eq: ['$totalStudentSum', 0] },
+//               0,
+//               {
+//                 $round: [
+//                   {
+//                     $multiply: [
+//                       { $divide: ['$totalPresentSum', '$totalStudentSum'] },
+//                       100,
+//                     ],
+//                   },
+//                   2,
+//                 ],
+//               },
+//             ],
+//           },
+//         },
+//       },
+//     ]),
+
+//     Assignment.countDocuments({
+//       teacherId: user.userId,
+//       status: { $eq: 'on-going' },
+//     }),
+
+//     //added total upcoming exams count
+//     Exam.countDocuments({
+//       teacherId: user.teacherId,
+//       date: { $gt: today }
+//     }),
+//   ]);
+
+
+//   return {
+//     todaysClass,
+//     overallAttendanceRate: todaysAttendanceRate[0]?.overallAttendanceRate || 0,
+//     activeStudents: todaysAttendanceRate[0]?.totalPresentSum || 0,
+//     assignmentDue,
+//     totalUpcomingExams,
+//     // NEW DATA
+//     totalSummoned,
+//     totalTerminated,
+
+//     // FULL SUPERVISOR CLASS LIST
+//     supervisorClasses,
+//   };
+// };
+
 
 const getTeacherHomePageOverview = async (user: TAuthUser) => {
-  const day = new Date()
-    .toLocaleString('en-US', { weekday: 'long' })
-    .toLowerCase();
+  const day = new Date().toLocaleString("en-US", { weekday: "long" }).toLowerCase();
 
-  const [todaysClass, todaysAttendanceRate, assignmentDue] = await Promise.all([
-    ClassSchedule.countDocuments({ teacherId: user.teacherId, days: day }),
-    ClassSchedule.aggregate([
-      {
-        $match: {
-          teacherId: new mongoose.Types.ObjectId(String(user.teacherId)),
-          days: day,
-        },
-      },
-      {
-        $lookup: {
-          from: 'attendances',
-          localField: '_id',
-          foreignField: 'classScheduleId',
-          as: 'attendance',
-        },
-      },
-      {
-        $unwind: {
-          path: '$attendance',
-          preserveNullAndEmptyArrays: true,
-        },
-      },
+  console.log("day ===>>> ",day);
 
-      {
-        $group: {
-          _id: '$_id',
-          totalPresent: { $first: '$attendance.presentStudents' },
-          totalStudents: { $first: '$attendance.totalStudents' },
-        },
-      },
-      {
-        $project: {
-          totalStudents: 1,
-          totalPresentCount: { $size: { $ifNull: ['$totalPresent', []] } },
-          attendanceRate: {
-            $cond: [
-              { $eq: ['$totalStudents', 0] },
-              0,
-              {
-                $round: [
-                  {
-                    $multiply: [
-                      {
-                        $divide: [
-                          { $size: { $ifNull: ['$totalPresent', []] } },
-                          '$totalStudents',
-                        ],
-                      },
-                      100,
-                    ],
-                  },
-                  2,
-                ],
-              },
-            ],
-          },
-        },
-      },
-      // New stage: Calculate overall attendance rate
-      {
-        $group: {
-          _id: null,
-          totalPresentSum: { $sum: '$totalPresentCount' },
-          totalStudentSum: { $sum: '$totalStudents' },
-        },
-      },
-      {
-        $project: {
-          _id: 0,
-          totalPresentSum: 1,
-          totalStudentSum: 1,
-          overallAttendanceRate: {
-            $cond: [
-              { $eq: ['$totalStudentSum', 0] },
-              0,
-              {
-                $round: [
-                  {
-                    $multiply: [
-                      { $divide: ['$totalPresentSum', '$totalStudentSum'] },
-                      100,
-                    ],
-                  },
-                  2,
-                ],
-              },
-            ],
-          },
-        },
-      },
-    ]),
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
 
-    Assignment.countDocuments({
-      teacherId: user.userId,
-      status: { $eq: 'on-going' },
-    }),
+  // Supervisor classes
+  const supervisorClasses = await ClassSectionSupervisorService.getMySupervisorsClasses(user.teacherId);
+
+  const classFilters = supervisorClasses.map((cls: any) => ({
+    classId: cls.classId,
+    section: cls.section,
+  }));
+
+  const studentMatchFilter = classFilters.length ? { $or: classFilters } : { _id: null };
+
+  const [totalSummoned, totalTerminated] = await Promise.all([
+    Student.countDocuments({ ...studentMatchFilter, summoned: true }),
+    Student.countDocuments({ ...studentMatchFilter, isTerminated: true }),
   ]);
+
+  // -----------------------------
+  // TODAY'S CLASS USING CLASSROUTINE
+  // -----------------------------
+  const todaysClassResult = await ClassRoutine.aggregate([
+    { $unwind: "$routines" },
+    { $match: { "routines.day": day } },
+    { $unwind: "$routines.periods" },
+    {
+      $match: {
+        "routines.periods.teacherId": new mongoose.Types.ObjectId(String(user.userId)),
+      },
+    },
+    { $count: "totalClasses" },
+  ]);
+
+  const todaysClass = todaysClassResult[0]?.totalClasses || 0;
+
+  // -----------------------------
+  // ATTENDANCE RATE USING CLASSROUTINE
+  // -----------------------------
+  const attendanceStats = await ClassRoutine.aggregate([
+    { $unwind: "$routines" },
+    { $match: { "routines.day": day } },
+    { $unwind: "$routines.periods" },
+    {
+      $match: {
+        "routines.periods.teacherId": new mongoose.Types.ObjectId(String(user.userId)),
+      },
+    },
+    {
+      $lookup: {
+        from: "attendances",
+        let: {
+          cid: "$classId",
+          sec: "$section",
+          pnum: "$routines.periods.periodNumber",
+        },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $and: [
+                  { $eq: ["$classId", "$$cid"] },
+                  { $eq: ["$section", "$$sec"] },
+                  { $eq: ["$periodNumber", "$$pnum"] },
+                  { $eq: ["$date", today] },
+                ],
+              },
+            },
+          },
+        ],
+        as: "attendance",
+      },
+    },
+    {
+      $unwind: {
+        path: "$attendance",
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+    {
+      $group: {
+        _id: null,
+        totalStudents: { $sum: "$attendance.totalStudents" },
+        totalPresent: { $sum: { $size: { $ifNull: ["$attendance.presentStudents", []] } } },
+      },
+    },
+    {
+      $project: {
+        _id: 0,
+        totalStudents: 1,
+        totalPresent: 1,
+        attendanceRate: {
+          $cond: [
+            { $eq: ["$totalStudents", 0] },
+            0,
+            {
+              $round: [
+                {
+                  $multiply: [
+                    { $divide: ["$totalPresent", "$totalStudents"] },
+                    100,
+                  ],
+                },
+                2,
+              ],
+            },
+          ],
+        },
+      },
+    },
+  ]);
+
+  const overallAttendanceRate = attendanceStats[0]?.attendanceRate || 0;
+  const activeStudents = attendanceStats[0]?.totalPresent || 0;
 
   return {
     todaysClass,
-    overallAttendanceRate: todaysAttendanceRate[0]?.overallAttendanceRate || 0,
-    activeStudents: todaysAttendanceRate[0]?.totalPresentSum || 0,
-    assignmentDue,
+    overallAttendanceRate,
+    activeStudents,
+    assignmentDue: 0, // remove old logic
+    totalUpcomingExams: 0, // adjust as needed
+    totalSummoned,
+    totalTerminated,
+    supervisorClasses,
   };
 };
+
+
+
 
 const getDailyWeeklyMonthlyAttendanceRate = async (user: TAuthUser) => {
   const today = new Date();
@@ -145,6 +332,106 @@ const getDailyWeeklyMonthlyAttendanceRate = async (user: TAuthUser) => {
   const dailyAttendanceRate = calculateAttendanceRate(daily);
   const weeklyAttendanceRate = calculateAttendanceRate(weekly);
   const monthlyAttendanceRate = calculateAttendanceRate(monthly);
+
+  return {
+    dailyAttendanceRate: dailyAttendanceRate?.attendanceRate || 0,
+    weeklyAttendanceRate: weeklyAttendanceRate?.attendanceRate || 0,
+    monthlyAttendanceRate: monthlyAttendanceRate?.attendanceRate || 0,
+  };
+};
+
+const getDailyWeeklyMonthlyAttendanceRateOfSpecificClassIdAndSection = async ( classId : string, section : string) => {
+
+  console.log({classId, section});
+
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0); // Start of today in UTC
+
+  const startOfWeek = new Date(today);
+  startOfWeek.setUTCDate(today.getUTCDate() - today.getUTCDay()); // Start from Sunday
+  startOfWeek.setUTCHours(0, 0, 0, 0);
+
+  const startOfMonth = new Date(
+    Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1),
+  ); // First of the month in UTC
+
+  const classObjectId = new mongoose.Types.ObjectId(classId);
+
+  console.log({today, startOfWeek, startOfMonth});
+
+  const [daily, weekly, monthly] = await Promise.all([
+    getAttendanceRateByClassIdAndSection(classObjectId, section, today),
+    getAttendanceRateByClassIdAndSection(classObjectId, section, startOfWeek),
+    getAttendanceRateByClassIdAndSection(classObjectId, section, startOfMonth),
+  ]);
+
+  console.log({dailyData: daily.length, weeklyData: weekly.length, monthlyData: monthly.length});
+
+  const dailyAttendanceRate = calculateAttendanceRate(daily);
+  const weeklyAttendanceRate = calculateAttendanceRate(weekly);
+  const monthlyAttendanceRate = calculateAttendanceRate(monthly);
+
+  return {
+    dailyAttendanceRate: dailyAttendanceRate?.attendanceRate || 0,
+    weeklyAttendanceRate: weeklyAttendanceRate?.attendanceRate || 0,
+    monthlyAttendanceRate: monthlyAttendanceRate?.attendanceRate || 0,
+  };
+};
+
+
+const getDailyWeeklyMonthlyAttendanceRateOfSchool = async (schoolId: string) => {
+  if (!mongoose.Types.ObjectId.isValid(schoolId)) {
+    throw new Error("Invalid schoolId");
+  }
+
+  const schoolObjectId = new mongoose.Types.ObjectId(schoolId);
+
+  // ------------------------------
+  // DATE SETUP
+  // ------------------------------
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0); // Start of today in UTC
+
+  const startOfWeek = new Date(today);
+  startOfWeek.setUTCDate(today.getUTCDate() - today.getUTCDay()); // Sunday
+  startOfWeek.setUTCHours(0, 0, 0, 0);
+
+  const startOfMonth = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1));
+
+  // ------------------------------
+  // FETCH ALL CLASSES OF THE SCHOOL
+  // ------------------------------
+  const classes = await Class.find({ schoolId: schoolObjectId }).lean();
+
+  let dailyAll: any[] = [];
+  let weeklyAll: any[] = [];
+  let monthlyAll: any[] = [];
+
+  // ------------------------------
+  // LOOP THROUGH EACH CLASS AND EACH SECTION
+  // ------------------------------
+  for (const cls of classes) {
+    for (const section of cls.section) {
+      const classObjectId = new mongoose.Types.ObjectId(cls._id);
+
+      const [daily, weekly, monthly] = await Promise.all([
+        getAttendanceRateByClassIdAndSection(classObjectId, section, today),
+        getAttendanceRateByClassIdAndSection(classObjectId, section, startOfWeek),
+        getAttendanceRateByClassIdAndSection(classObjectId, section, startOfMonth),
+      ]);
+
+      dailyAll = dailyAll.concat(daily);
+      weeklyAll = weeklyAll.concat(weekly);
+      monthlyAll = monthlyAll.concat(monthly);
+    }
+  }
+
+  // ------------------------------
+  // CALCULATE ATTENDANCE RATES
+  // ------------------------------
+  const dailyAttendanceRate = calculateAttendanceRate(dailyAll);
+  const weeklyAttendanceRate = calculateAttendanceRate(weeklyAll);
+  const monthlyAttendanceRate = calculateAttendanceRate(monthlyAll);
 
   return {
     dailyAttendanceRate: dailyAttendanceRate?.attendanceRate || 0,
@@ -349,6 +636,70 @@ const getAdminHomePageOverview = async (user: TAuthUser) => {
   return user;
 };
 
+const getHomePageOnlyOverviewOfAdminWithinApp = async (schoolId: string) => {
+  const schoolObjectId = new mongoose.Types.ObjectId(schoolId);
+
+  // Prepare today's date once
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+
+  // Run everything in parallel (fastest approach)
+  const [
+    studentStats,
+    presentResult
+  ] = await Promise.all([
+    // Count normal, terminated, summoned in one aggregated query
+    Student.aggregate([
+      { $match: { schoolId: schoolObjectId } },
+      {
+        $group: {
+          _id: null,
+          totalStudents: { $sum: 1 },
+          totalTerminatedStudents: {
+            $sum: { $cond: [{ $eq: ['$isTerminated', true] }, 1, 0] }
+          },
+          totalSummonedStudents: {
+            $sum: { $cond: [{ $eq: ['$summoned', true] }, 1, 0] }
+          }
+        }
+      }
+    ]),
+
+    // Attendance present count for today
+    Attendance.aggregate([
+      {
+        $match: {
+          schoolId: schoolObjectId,
+          date: { $gte: today }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalPresent: { $sum: { $size: '$presentStudents' } }
+        }
+      }
+    ])
+  ]);
+
+  // Extract results safely
+  const stats = studentStats[0] || {
+    totalStudents: 0,
+    totalTerminatedStudents: 0,
+    totalSummonedStudents: 0
+  };
+
+  const todayTotalPresentStudents =
+    presentResult.length > 0 ? presentResult[0].totalPresent : 0;
+
+  return {
+    totalStudents: stats.totalStudents,
+    totalTerminatedStudents: stats.totalTerminatedStudents,
+    totalSummonedStudents: stats.totalSummonedStudents,
+    todayTotalPresentStudents
+  };
+};
+
 export const OverviewService = {
   getTeacherHomePageOverview,
   getAssignmentCount,
@@ -357,4 +708,7 @@ export const OverviewService = {
   getParentHomePageOverview,
   getAdminHomePageOverview,
   getStudentAttendance,
+  getDailyWeeklyMonthlyAttendanceRateOfSpecificClassIdAndSection,
+  getHomePageOnlyOverviewOfAdminWithinApp,
+  getDailyWeeklyMonthlyAttendanceRateOfSchool
 };

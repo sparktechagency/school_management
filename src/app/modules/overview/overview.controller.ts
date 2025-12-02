@@ -5,6 +5,7 @@ import { OverviewService } from './overview.service';
 
 const OverviewController = {
   getTeacherHomePageOverview: catchAsync(async (req, res) => {
+
     const result = await OverviewService.getTeacherHomePageOverview(
       req.user as TAuthUser,
     );
@@ -15,6 +16,7 @@ const OverviewController = {
       message: 'Teacher home page overview retrieved successfully',
       data: result,
     });
+
   }),
 
   getDailyWeeklyMonthlyAttendanceRate: catchAsync(async (req, res) => {
@@ -31,6 +33,7 @@ const OverviewController = {
   }),
 
   getAssignmentCount: catchAsync(async (req, res) => {
+    
     const result = await OverviewService.getAssignmentCount(
       req.user as TAuthUser,
     );
@@ -41,6 +44,7 @@ const OverviewController = {
       message: 'Assignment count retrieved successfully',
       data: result,
     });
+
   }),
 
   getStudentAttendance: catchAsync(async (req, res) => {
@@ -95,6 +99,57 @@ const OverviewController = {
       data: result,
     });
   }),
+
+  getDailyWeeklyMonthlyAttendanceRateOfSpecificClassIdAndSection: catchAsync(async (req, res) => {
+
+    const {classId, section} = req.query;
+
+    const result = await OverviewService.getDailyWeeklyMonthlyAttendanceRateOfSpecificClassIdAndSection(
+      classId as string, section as string
+    );
+
+    sendResponse(res, {
+      statusCode: 200,
+      success: true,
+      message: 'Attendance overview (daily, weekly, monthly) of specific class and section retrieved successfully',
+      data: result,
+    });
+  }),
+
+  getDailyWeeklyMonthlyAttendanceRateOfSchool: catchAsync(async (req, res) => {
+
+    console.log(req.user);
+    const {mySchoolId} = req.user;
+
+    const result = await OverviewService.getDailyWeeklyMonthlyAttendanceRateOfSchool(
+      mySchoolId as string
+    );
+
+    sendResponse(res, {
+      statusCode: 200,
+      success: true,
+      message: 'Attendance overview (daily, weekly, monthly) of specific school retrieved successfully',
+      data: result,
+    });
+  }),
+
+   getHomePageOnlyOverviewOfAdminWithinApp: catchAsync(async (req, res) => {
+    const { schoolId } = req.user; // assuming school user is logged in
+
+    const result =
+      await OverviewService.getHomePageOnlyOverviewOfAdminWithinApp(
+        schoolId as string
+      );
+
+    sendResponse(res, {
+      statusCode: 200,
+      success: true,
+      message: 'Admin home dashboard overview retrieved successfully.',
+      data: result,
+    });
+  }),
+
+
 };
 
 export default OverviewController;

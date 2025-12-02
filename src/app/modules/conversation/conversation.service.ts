@@ -15,6 +15,7 @@ const createConversation = async (
   let result;
 
   const subscription = await SubscriptionService.getMySubscription(user);
+  
   if (user.role === USER_ROLE.parents) {
     if (
       Object.keys(subscription || {}).length === 0 ||

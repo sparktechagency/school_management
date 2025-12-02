@@ -27,6 +27,19 @@ const getAllLevels = catchAsync(async (req, res) => {
   });
 });
 
+const getLevelsWithClassesOfSchool = catchAsync(async (req, res) => {
+  const {schoolId} = req.user;
+
+  const result = await LevelService.getLevelsWithClassesOfSchool(schoolId) ;
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: 'Levels and classes retrieved successfully for the school',
+    data: result,
+  });
+});
+
 const updateLevel = catchAsync(async (req, res) => {
   const result = await LevelService.updateLevel(req.params.levelId, req.body);
   sendResponse(res, {
@@ -52,4 +65,5 @@ export const LevelController = {
   getAllLevels,
   updateLevel,
   deleteLevel,
+  getLevelsWithClassesOfSchool
 };

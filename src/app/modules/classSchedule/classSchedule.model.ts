@@ -77,6 +77,10 @@ const classScheduleSchema = new Schema<TClassSchedule>(
       required: true,
       trim: true,
     },
+    isSupervisor: {
+      type: Boolean,
+      default: false,
+    }
   },
   {
     timestamps: true,
