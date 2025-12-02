@@ -3,11 +3,13 @@ import path from 'path';
 
 dotenv.config({ path: path.join(process.cwd(), '.env') });
 
+export const BASE_API_URL = `${process.env.BASE_API_PROTOCOL}://${process.env.IP}:${process.env.PORT}/api/v1`;
+
 export default {
   NODE_ENV: process.env.NODE_ENV,
   port: process.env.PORT,
   database_url: process.env.DATABASE_URL,
-  base_api_url: process.env.BASE_API_URL,
+  base_api_url: BASE_API_URL,
 
   salt_round: process.env.SALT_ROUND,
   socket_port: process.env.SOCKET_PORT,
