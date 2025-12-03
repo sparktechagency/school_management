@@ -838,6 +838,7 @@ const getSpecificStudentReport = async (studentId: string) => {
   const totalPresentDays = dayList.filter((d) => d.isPresent).length;
   const totalAbsentDays = dayList.filter((d) => !d.isPresent).length;
 
+
   // 7. Final response
   return {
     studentId,
@@ -848,6 +849,7 @@ const getSpecificStudentReport = async (studentId: string) => {
     isTerminated: student.isTerminated || false,
 
     classId,
+    className: student.className  || "N/A",
     section,
     month: dayjs().format("MMMM YYYY"),
 

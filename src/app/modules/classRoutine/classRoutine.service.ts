@@ -552,6 +552,13 @@ const getTodayUpcomingClasses = async (
 
       // 4) Unwind periods
       { $unwind: "$routines.periods" },
+      // (NEW) Remove break periods + unassigned subjects
+      {
+        $match: {
+          "routines.periods.isBreak": { $ne: true },
+          "routines.periods.subjectId": { $ne: null },
+        },
+      },
 
       // 5) Teacher-specific match
       ...(user.role === USER_ROLE.teacher
@@ -589,13 +596,15 @@ const getTodayUpcomingClasses = async (
       // 8) Lookup teacher
       {
         $lookup: {
-          from: "teachers",
+          from: "users",
           localField: "routines.periods.teacherId",
           foreignField: "_id",
-          as: "teacher",
+          as: "user",
         },
       },
-      { $unwind: { path: "$teacher", preserveNullAndEmptyArrays: true } },
+      { $unwind: { path: "$user", preserveNullAndEmptyArrays: true } },
+
+
 
       // 9) Lookup class info
       {
@@ -675,7 +684,12 @@ const getTodayUpcomingClasses = async (
             $ifNull: ["$subject.subjectName", "$routines.periods.subjectName"],
           },
 
-
+          teacherId: {
+            $ifNull: ["$user._id", "$routines.periods.teacherId"],
+          },
+          teacherName: {
+            $ifNull: ["$user.name", "$routines.periods.teacherName"],
+          },
           startTime: "$routines.periods.startTime",
           endTime: "$routines.periods.endTime",
           totalStudents: { $size: "$matchedStudents" },
