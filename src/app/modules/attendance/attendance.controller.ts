@@ -32,9 +32,9 @@ const getAttendanceHistory = catchAsync(async (req, res) => {
 });
 
 const getMyAttendance = catchAsync(async (req, res) => {
-  const result = await AttendanceService.getMyAttendance(
+  const result = await AttendanceService.getMyAttendanceThisMonth(
     req.user as TAuthUser,
-    req.query,
+    req.query
   );
   sendResponse(res, {
     statusCode: httpStatus.OK,

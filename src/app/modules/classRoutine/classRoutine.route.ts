@@ -24,6 +24,12 @@ router
     )
 
     .get(
+        "/class_schedule_by_day",
+        auth(USER_ROLE.school, USER_ROLE.student),
+        ClassRoutineController.getClassScheduleByDay
+    )
+
+    .get(
         "/specific_class_section/class_list",
         auth(USER_ROLE.teacher, USER_ROLE.student, USER_ROLE.school, USER_ROLE.parents),
         ClassRoutineController.getTodayClassListByClassAndSection

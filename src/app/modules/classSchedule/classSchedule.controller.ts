@@ -59,9 +59,9 @@ const deleteClassSchedule = catchAsync(async (req, res) => {
 });
 
 const getClassScheduleByDays = catchAsync(async (req, res) => {
-  const result = await ClassScheduleService.getClassScheduleByDays(
-    req.query,
+  const result = await ClassScheduleService.getClassScheduleByDay(
     req.user as TAuthUser,
+    req.query,
   );
   sendResponse(res, {
     statusCode: httpStatus.OK,

@@ -233,6 +233,25 @@ const getTodayClassListByClassAndSection = catchAsync(async (req, res) => {
 });
 
 
+const getClassScheduleByDay = catchAsync(async (req, res) => {
+
+  console.log("req.query", req.query);
+
+  const user = req.user; // JWT decoded user
+  const query = req.query;
+
+  const result = await ClassRoutineService.getClassScheduleByDay(user, query);
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Class schedule fetched successfully",
+    data: result,
+  });
+
+});
+
+
 const getTodayClassListForSchoolAdmin = catchAsync(async (req, res) => {
    const {mySchoolId} = req.user
 
@@ -311,5 +330,6 @@ export const ClassRoutineController = {
     getTodayClassListByClassAndSection,
     getHistoryClassListByClassAndSection,
     getTodayClassListForSchoolAdmin,
-    getHistoryClassListForSchoolAdminByDate
+    getHistoryClassListForSchoolAdminByDate,
+    getClassScheduleByDay
 }

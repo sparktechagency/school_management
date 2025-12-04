@@ -22,6 +22,7 @@ import {
 } from './attendance.helper';
 import { TAttendance, UpdateAttendancePayload } from './attendance.interface';
 import Attendance from './attendance.model';
+import httpStatus from 'http-status';
 
 const createAttendance = async (
   payload: Partial<TAttendance>,
@@ -404,6 +405,163 @@ const getMyAttendance = async (
     const meta = await attendanceQuery.countTotal(Attendance);
     return { meta, result };
 };
+
+
+const getMyAttendanceThisMonth = async (
+  user: TAuthUser,
+  query: Record<string, unknown>
+) => {
+
+
+    const { token } = query;
+
+    let decodedUser;
+
+    if (token) {
+        decodedUser = decodeToken(
+            token as string,
+            config.jwt.access_token as Secret,
+        ) as JwtPayload;
+    }
+
+    if (decodedUser?.role === USER_ROLE.parents) {
+        const subscription = await SubscriptionService.getMySubscription(
+            decodedUser as TAuthUser,
+        );
+
+        if (
+            Object.keys(subscription || {}).length === 0 ||
+            subscription.isAttendanceEnabled === false
+        ) {
+            throw new AppError(
+                700,
+                'You need an active subscription to get attendance',
+            );
+        }
+    }
+
+//   if (user.role !== USER_ROLE.student) {
+//     throw new AppError(httpStatus.FORBIDDEN, "Only students can access this");
+//   }
+
+  // 1️⃣ Fetch student info
+  const student = await StudentService.findStudent(user.studentId);
+  if (!student) throw new AppError(404, "Student not found");
+
+  const studentObjectId = new mongoose.Types.ObjectId(String(user.studentId));
+  const schoolId = new mongoose.Types.ObjectId(String(student.schoolId));
+
+  // 2️⃣ Current month start & end
+  const startOfMonth = dayjs().startOf("month").startOf("day").toDate();
+  const endOfMonth = dayjs().endOf("month").endOf("day").toDate();
+
+  // 3️⃣ Build aggregation
+  const builder = new AggregationQueryBuilder(query);
+
+  const attendanceData = await builder
+    .customPipeline([
+      {
+        $match: {
+          schoolId,
+          classId: new mongoose.Types.ObjectId(String(student.classId)),
+          section: student.section,
+          date: { $gte: startOfMonth, $lte: endOfMonth },
+        },
+      },
+
+      // Populate subject info
+      {
+        $lookup: {
+          from: "subjects",
+          localField: "subjectId",
+          foreignField: "_id",
+          as: "subject",
+        },
+      },
+      { $unwind: { path: "$subject", preserveNullAndEmptyArrays: true } },
+
+      // 4️⃣ Group by day
+      {
+        $group: {
+          _id: { date: { $dateToString: { format: "%Y-%m-%d", date: "$date" } } },
+          periods: { $push: "$$ROOT" },
+        },
+      },
+
+      // 5️⃣ Build daily history with period details
+      {
+        $project: {
+          _id: 0,
+          date: "$_id.date",
+          history: {
+            $map: {
+              input: "$periods",
+              as: "p",
+              in: {
+                periodNumber: "$$p.periodNumber",
+                startTime: "$$p.startTime",
+                endTime: "$$p.endTime",
+                subjectName: { $ifNull: ["$$p.subject.subjectName", "$$p.subjectName"] },
+                isPresent: {
+                  $in: [studentObjectId, "$$p.presentStudents.studentId"],
+                },
+              },
+            },
+          },
+        },
+      },
+
+      // 6️⃣ Count total periods and periods attended
+      {
+        $addFields: {
+          totalPeriods: { $size: "$history" },
+          totalPresentPeriods: {
+            $size: {
+              $filter: {
+                input: "$history",
+                as: "h",
+                cond: { $eq: ["$$h.isPresent", true] },
+              },
+            },
+          },
+        },
+      },
+
+      // 7️⃣ Determine day-level presence
+      {
+        $addFields: {
+          isPresent: {
+            $cond: [
+              {
+                $gte: [
+                  "$totalPresentPeriods",
+                  { $ceil: { $divide: ["$totalPeriods", 2] } }, // at least half periods
+                ],
+              },
+              true,
+              false,
+            ],
+          },
+        },
+      },
+
+      { $sort: { date: 1 } },
+    ])
+    .execute(Attendance);
+
+  // 8️⃣ Monthly summary: totalPresents & totalAbsents are **days** based
+  const totalPresents = attendanceData.filter((d: any) => d.isPresent).length;
+  const totalAbsents = attendanceData.filter((d: any) => !d.isPresent).length;
+
+  // 9️⃣ Return structured response
+  return {
+    month: dayjs().format("MMMM YYYY"),
+    totalPresents,
+    totalAbsents,
+    attendanceHistory: attendanceData,
+  };
+};
+
 
 const getMyAttendanceDetails = async (
     user: TAuthUser,
@@ -813,6 +971,7 @@ export const AttendanceService = {
     createAttendance,
     getAttendanceHistory,
     getMyAttendance,
+    getMyAttendanceThisMonth,
     getMyAttendanceDetails,
     getAttendanceDetails,
     getAttendanceCount,

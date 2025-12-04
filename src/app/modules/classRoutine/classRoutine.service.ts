@@ -95,12 +95,13 @@ const updatePeriodInClassRoutine = async (
   // Optionally, update startTime/endTime in each day's period template (but not subjectId/teacherId)
   routine.routines.forEach(dayRoutine => {
     const period = dayRoutine.periods.find(p => p.periodNumber === periodNumber);
+
     if (period) {
       period.startTime = updateData.startTime ?? period.startTime;
       period.endTime = updateData.endTime ?? period.endTime;
       period.isBreak = updateData.isBreak ?? period.isBreak;
     }
-  });
+   });
 
   await routine.save();
   return routine;
@@ -719,6 +720,107 @@ const getTodayUpcomingClasses = async (
   // Meta for pagination
   // ------------------------------
   const meta = await upcomingQuery.countTotal(ClassRoutine);
+
+  return { meta, result };
+};
+
+const getClassScheduleByDay = async (
+  user: TAuthUser,
+  query: Record<string, unknown>
+) => {
+  if (user.role !== USER_ROLE.student) {
+    throw new AppError(httpStatus.FORBIDDEN, "Only students can access this");
+  }
+
+  // -----------------------------
+  // DAY LOGIC (NO DATE)
+  // -----------------------------
+  const today =
+    (query.today as string)?.toLowerCase() ||
+    dayjs().format("dddd").toLowerCase();
+
+  // -----------------------------
+  // STUDENT CLASS INFO
+  // -----------------------------
+  const student = await StudentService.findStudent(user.studentId);
+  if (!student) throw new AppError(404, "Student not found");
+
+  const matchStage = {
+    schoolId: new mongoose.Types.ObjectId(String(user.mySchoolId)),
+    classId: new mongoose.Types.ObjectId(String(student.classId)),
+    section: student.section,
+  };
+
+  const scheduleQuery = new AggregationQueryBuilder(query);
+
+  // -----------------------------
+  // PIPELINE
+  // -----------------------------
+  const result = await scheduleQuery
+    .customPipeline([
+      { $match: matchStage },
+
+      { $unwind: "$routines" },
+      { $match: { "routines.day": today } },
+
+      { $unwind: "$routines.periods" },
+
+      // Remove breaks + empty subjects
+      {
+        $match: {
+          "routines.periods.isBreak": { $ne: true },
+          "routines.periods.subjectId": { $ne: null },
+        },
+      },
+
+      // SUBJECT NAME
+      {
+        $lookup: {
+          from: "subjects",
+          localField: "routines.periods.subjectId",
+          foreignField: "_id",
+          as: "subject",
+        },
+      },
+      { $unwind: { path: "$subject", preserveNullAndEmptyArrays: true } },
+
+      // CLASS NAME
+      {
+        $lookup: {
+          from: "classes",
+          localField: "classId",
+          foreignField: "_id",
+          as: "classInfo",
+        },
+      },
+      { $unwind: { path: "$classInfo", preserveNullAndEmptyArrays: true } },
+
+      // FINAL PROJECT (ONLY REQUIRED FIELDS)
+      {
+        $project: {
+          _id: 0,
+
+          day: "$routines.day",
+          periodNumber: "$routines.periods.periodNumber",
+
+          startTime: "$routines.periods.startTime",
+          endTime: "$routines.periods.endTime",
+
+          classId: 1,
+          className: "$classInfo.className",
+          section: 1,
+
+          subjectName: {
+            $ifNull: ["$subject.subjectName", "$routines.periods.subjectName"],
+          },
+        },
+      },
+    ])
+    .sort()
+    .paginate()
+    .execute(ClassRoutine);
+
+  const meta = await scheduleQuery.countTotal(ClassRoutine);
 
   return { meta, result };
 };
@@ -1549,5 +1651,6 @@ export const ClassRoutineService = {
   getTodayClassListByClassAndSection,
   getHistoryClassListOfSpecificClassAndSectionByDate,
   getTodayClassListForSchoolAdmin,
-  getHistoryClassListForSchoolAdminByDate
+  getHistoryClassListForSchoolAdminByDate,
+  getClassScheduleByDay
 };

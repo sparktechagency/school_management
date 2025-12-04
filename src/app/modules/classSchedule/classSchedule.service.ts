@@ -19,6 +19,8 @@ import User from '../user/user.model';
 import { commonPipeline } from './classSchedule.helper';
 import { TClassSchedule } from './classSchedule.interface';
 import ClassSchedule from './classSchedule.model';
+import dayjs from 'dayjs';
+import { ClassRoutine } from '../classRoutine/classRoutine.model';
 
 const createClassSchedule = async (
   payload: Partial<TClassSchedule>,
@@ -176,59 +178,104 @@ const deleteClassSchedule = async (
   return result;
 };
 
-const getClassScheduleByDays = async (
-  query: Record<string, unknown>,
+const getClassScheduleByDay = async (
   user: TAuthUser,
+  query: Record<string, unknown>
 ) => {
-  const scheduleAggregation = new AggregationQueryBuilder(query);
-
-  const andCondition = [];
-
-  if (user.role === USER_ROLE.teacher) {
-    const findTeacher = await TeacherService.findTeacher(user);
-    andCondition.push(
-      { teacherId: new mongoose.Types.ObjectId(String(user.teacherId)) },
-      { schoolId: new mongoose.Types.ObjectId(String(findTeacher?.schoolId)) },
-    );
-  } else if (user.role === USER_ROLE.student) {
-    const findStudent = await StudentService.findStudent(user.studentId);
-
-    andCondition.push(
-      { schoolId: new mongoose.Types.ObjectId(String(findStudent.schoolId)) },
-      { classId: new mongoose.Types.ObjectId(String(findStudent.classId)) },
-      { section: findStudent.section },
-    );
+  if (user.role !== USER_ROLE.student) {
+    throw new AppError(httpStatus.FORBIDDEN, "Only students can access this");
   }
 
-  const result = await scheduleAggregation
+  // -----------------------------
+  // DAY LOGIC (NO DATE)
+  // -----------------------------
+  const today =
+    (query.today as string)?.toLowerCase() ||
+    dayjs().format("dddd").toLowerCase();
+
+  // -----------------------------
+  // STUDENT CLASS INFO
+  // -----------------------------
+  const student = await StudentService.findStudent(user.studentId);
+  if (!student) throw new AppError(404, "Student not found");
+
+  const matchStage = {
+    schoolId: new mongoose.Types.ObjectId(String(user.mySchoolId)),
+    classId: new mongoose.Types.ObjectId(String(student.classId)),
+    section: student.section,
+  };
+
+  const scheduleQuery = new AggregationQueryBuilder(query);
+
+  // -----------------------------
+  // PIPELINE
+  // -----------------------------
+  const result = await scheduleQuery
     .customPipeline([
+      { $match: matchStage },
+
+      { $unwind: "$routines" },
+      { $match: { "routines.day": today } },
+
+      { $unwind: "$routines.periods" },
+
+      // Remove breaks + empty subjects
       {
         $match: {
-          $and: [...andCondition, { days: query.days }, { isAttendance: { $ne: true } }],
+          "routines.periods.isBreak": { $ne: true },
+          "routines.periods.subjectId": { $ne: null },
         },
       },
-      ...classAndSubjectQuery,
+
+      // SUBJECT NAME
+      {
+        $lookup: {
+          from: "subjects",
+          localField: "routines.periods.subjectId",
+          foreignField: "_id",
+          as: "subject",
+        },
+      },
+      { $unwind: { path: "$subject", preserveNullAndEmptyArrays: true } },
+
+      // CLASS NAME
+      {
+        $lookup: {
+          from: "classes",
+          localField: "classId",
+          foreignField: "_id",
+          as: "classInfo",
+        },
+      },
+      { $unwind: { path: "$classInfo", preserveNullAndEmptyArrays: true } },
+
+      // FINAL PROJECT (ONLY REQUIRED FIELDS)
       {
         $project: {
-          _id: 1,
-          days: 1,
-          period: 1,
-          selectTime: 1,
-          section: 1,
-          endTime: 1,
-          isAttendance: 1,
-          classId: '$class._id',
-          className: '$class.className',
-          subjectName: '$subject.subjectName',
+          _id: 0,
 
+          day: "$routines.day",
+          periodNumber: "$routines.periods.periodNumber",
+
+          startTime: "$routines.periods.startTime",
+          endTime: "$routines.periods.endTime",
+
+          classId: 1,
+          className: "$classInfo.className",
+          section: 1,
+
+          subjectName: {
+            $ifNull: ["$subject.subjectName", "$routines.periods.subjectName"],
+          },
         },
       },
     ])
     .sort()
     .paginate()
-    .execute(ClassSchedule);
+    .execute(ClassRoutine);
 
-  const meta = await scheduleAggregation.countTotal(ClassSchedule);
+  const meta = await scheduleQuery.countTotal(ClassRoutine);
+
   return { meta, result };
 };
 
@@ -575,7 +622,7 @@ export const ClassScheduleService = {
   getAllClassSchedule,
   updateClassSchedule,
   deleteClassSchedule,
-  getClassScheduleByDays,
+  getClassScheduleByDay,
   getUpcomingClasses,
   getUpcomingClassesByClassScheduleId,
   getWeeklySchedule,
