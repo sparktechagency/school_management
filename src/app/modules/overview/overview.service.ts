@@ -176,7 +176,8 @@ import Class from '../class/class.model';
 
 
 const getTeacherHomePageOverview = async (user: TAuthUser) => {
-const day = new Date("Saturday").toLocaleString("en-US", {
+
+const day = new Date().toLocaleString("en-US", {
   weekday: "long",
 }).toLowerCase();
 
