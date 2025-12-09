@@ -205,7 +205,9 @@ const getStudentsOfClasses = async (
   user: TAuthUser,
   query: Record<string, unknown>,
 ) => {
+
   const { className, section, classId } = query;
+
   const findTeacher = await TeacherService.findTeacher(user);
 
   const matchConditions: Record<string, any>[] = [
@@ -230,6 +232,7 @@ const getStudentsOfClasses = async (
     });
   }
 
+  console.log("match query =>>> ", matchConditions);
   const studentQuery = new AggregationQueryBuilder(query);
 
   const result = await studentQuery

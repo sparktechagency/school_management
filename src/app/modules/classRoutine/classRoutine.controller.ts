@@ -4,6 +4,7 @@ import catchAsync from "../../utils/catchAsync";
 import { ClassRoutineService } from "./classRoutine.service";
 import sendResponse from "../../utils/sendResponse";
 import { Request, Response } from "express";
+import Student from "../student/student.model";
 
 const getRoutineByClassAndSection = catchAsync(async (req: Request, res: Response) => {
 
@@ -27,6 +28,34 @@ const getRoutineByClassAndSection = catchAsync(async (req: Request, res: Respons
     });
 })
 
+const getRoutineByToken = catchAsync(async (req: Request, res: Response) => {
+
+  const {studentId} = req.user;
+
+  if(!studentId){
+      throw new AppError(httpStatus.BAD_REQUEST, 'studentId is required');
+  }
+  const isExistStudent = await Student.findById(studentId);
+
+  if(!isExistStudent){
+      throw new AppError(httpStatus.BAD_REQUEST, 'student does not exist');
+  }
+
+  const routine = await ClassRoutineService.getRoutineByToken(
+      isExistStudent.classId as string,
+      isExistStudent.section as string
+  );
+
+
+
+  sendResponse(res, {
+      statusCode: httpStatus.OK,
+      success: true,
+      message: 'Routine fetched successfully',
+      data: routine,
+  });
+
+})
 
 // Add period to all days
 export const addPeriodToClassRoutine = catchAsync(async (req: Request, res: Response) => {
@@ -174,7 +203,8 @@ const getTodayUpcomingClasses = catchAsync(async (req: Request, res: Response) =
       periods = [],
       routine = [],
       addedStudents = [],
-      superVisor = null
+      superVisors = null,
+      removeSupervisors
     } = req.body;
 
     if (!schoolId || !classId || !section) {
@@ -193,7 +223,8 @@ const getTodayUpcomingClasses = catchAsync(async (req: Request, res: Response) =
       periods,
       routine,
       addedStudents,
-      superVisor,
+      superVisors,
+      removeSupervisors
     };
 
     const updatedRoutine = await ClassRoutineService.addOrUpdateManySubjectsInRoutine(payload);
@@ -230,6 +261,25 @@ const getTodayClassListByClassAndSection = catchAsync(async (req, res) => {
     message: "Today class list fetched successfully",
     data,
   });
+});
+
+
+const getClassScheduleByDay = catchAsync(async (req, res) => {
+
+  console.log("req.query", req.query);
+
+  const user = req.user; // JWT decoded user
+  const query = req.query;
+
+  const result = await ClassRoutineService.getClassScheduleByDay(user, query);
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Class schedule fetched successfully",
+    data: result,
+  });
+
 });
 
 
@@ -311,5 +361,7 @@ export const ClassRoutineController = {
     getTodayClassListByClassAndSection,
     getHistoryClassListByClassAndSection,
     getTodayClassListForSchoolAdmin,
-    getHistoryClassListForSchoolAdminByDate
+    getHistoryClassListForSchoolAdminByDate,
+    getClassScheduleByDay,
+    getRoutineByToken
 }

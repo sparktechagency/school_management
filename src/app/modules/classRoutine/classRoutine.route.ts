@@ -12,6 +12,12 @@ router
     )
 
     .get(
+        "/Specific_class_section_token",
+        auth(USER_ROLE.student),
+        ClassRoutineController.getRoutineByToken
+    )
+
+    .get(
         "/unique_subjects",
         auth(USER_ROLE.school, USER_ROLE.manager),
         ClassRoutineController.getUniqueSubjectsOfClassRoutine
@@ -21,6 +27,12 @@ router
         "/today_upcoming_classes", 
         auth(USER_ROLE.teacher, USER_ROLE.student, USER_ROLE.school, USER_ROLE.parents),
         ClassRoutineController.getTodayUpcomingClasses
+    )
+
+    .get(
+        "/class_schedule_by_day",
+        auth(USER_ROLE.school, USER_ROLE.student),
+        ClassRoutineController.getClassScheduleByDay
     )
 
     .get(

@@ -86,13 +86,17 @@ const getActiveAssignment = async (
   user: TAuthUser,
   query: Record<string, unknown>,
 ) => {
+  console.log(" user =======>>>>>> ", user)
   const { graded } = query;
 
+  console.log("query", query);
+  console.log("graded", graded);
   const date = new Date();
   date.setUTCHours(0, 0, 0, 0);
 
   let matchStage = {};
   if (graded) {
+    console.log("from graded function =>>>>> ", )
     matchStage = {
       //   dueDate: {
       //     $lte: date,
@@ -110,7 +114,14 @@ const getActiveAssignment = async (
     };
   }
 
+  if(user.role === USER_ROLE.teacher) {
+    matchStage.teacherId = new mongoose.Types.ObjectId(user.userId)
+  }
+
+  console.log("matchStage", matchStage);
+
   const findTeacher = await TeacherService.findTeacher(user);
+
   const assignmentQuery = new AggregationQueryBuilder(query);
 
   console.log(findTeacher, 'findTeacher');
@@ -120,6 +131,7 @@ const getActiveAssignment = async (
       {
         $match: {
           schoolId: new mongoose.Types.ObjectId(String(findTeacher.schoolId)),
+          
           ...matchStage,
         },
       },

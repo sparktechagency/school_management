@@ -58,6 +58,7 @@ const updateSubscription = async (
 };
 
 const getMySubscription = async (user: TAuthUser) => {
+
   const subscription = await MySubscription.aggregate([
     {
       $match: { userId: new mongoose.Types.ObjectId(String(user.userId)) },
@@ -77,6 +78,8 @@ const getMySubscription = async (user: TAuthUser) => {
       },
     },
   ]);
+
+  // console.log("subscription", subscription);
 
   return subscription[0] || {};
 };

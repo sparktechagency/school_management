@@ -40,7 +40,11 @@ const schoolSchema = new Schema<TSchool>(
     isBlocked: {
       type: Boolean,
       default: false,
-    }
+    },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,

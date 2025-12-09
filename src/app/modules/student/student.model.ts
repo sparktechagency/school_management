@@ -27,7 +27,10 @@ const summonHistorySchema = new Schema(
     summonedAt: { 
       type: Date, 
       default: Date.now 
-    }
+    },
+    actionTime: { type: Date, default: Date.now },
+    removedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    removedTime: { type: Date },
   },
   { _id: false }
 );

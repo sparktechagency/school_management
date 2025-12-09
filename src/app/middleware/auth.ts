@@ -6,7 +6,8 @@ import { JwtPayload, Secret } from 'jsonwebtoken';
 import { TUserRole } from '../interface';
 import config from '../../config';
 import User from '../modules/user/user.model';
-import { USER_STATUS } from '../constant';
+import { USER_ROLE, USER_STATUS } from '../constant';
+import School from '../modules/school/school.model';
 
 export const auth = (...requestedRole: TUserRole[]) => {
   return catchAsync(async (req, res, next) => {
@@ -56,8 +57,8 @@ export const auth = (...requestedRole: TUserRole[]) => {
       );
     }
 
-    req.user = decoded as JwtPayload;
-    
+    // Attach user info to request
+    req.user = decoded;
     next();
   });
 };

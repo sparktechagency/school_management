@@ -12,6 +12,11 @@ router
     ClassSectionSupervisorController.addOrUpdateSupervisor
 )
 
+.post(
+    "/add-many",
+    ClassSectionSupervisorController.addMultipleSupervisors
+)
+
 .get(
     "/my",
     auth(USER_ROLE.teacher),

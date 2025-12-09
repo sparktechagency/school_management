@@ -13,6 +13,9 @@ import { StudentService } from "../student/student.service";
 import { AssignedSubjectTeacherService } from "../assignedSubjectTeacher/assignedSubjectTeacher.service";
 import { ClassSectionSupervisorService } from "../classSectionSuperVisor/classSectionSupervisor.service";
 import { ClassSectionSupervisor } from "../classSectionSuperVisor/classSectionSupervisor.model";
+import config from "../../../config";
+import { JwtPayload, Secret } from "jsonwebtoken";
+import { decodeToken } from "../../utils/decodeToken";
 
 const getRoutineByClassAndSection = async (classId: string, section: string) => {
   const routine = await ClassRoutine.findOne({ classId, section: section.toUpperCase() });
@@ -21,16 +24,28 @@ const getRoutineByClassAndSection = async (classId: string, section: string) => 
     throw new Error(`Routine not found for class ${classId} and section ${section}`);
   }
 
-  const supervisor = await ClassSectionSupervisor.findOne({
+  const supervisor = await ClassSectionSupervisor.find({
     classId,
     section: section.toUpperCase(),
   }).select('teacherId teacherName').lean(); // null if not found
 
   return {  
     routine,
-    supervisor: supervisor || null,
+    supervisors: supervisor || [],
   };
 };
+
+const getRoutineByToken = async (classId: string, section: string) => {
+  const routine = await ClassRoutine.findOne({ classId, section: section.toUpperCase() });
+
+  if (!routine) {
+    throw new Error(`Routine not found for class ${classId} and section ${section}`);
+  }
+
+
+  return routine;
+};
+
 
 
 const addPeriodToClassRoutine = async (
@@ -95,12 +110,13 @@ const updatePeriodInClassRoutine = async (
   // Optionally, update startTime/endTime in each day's period template (but not subjectId/teacherId)
   routine.routines.forEach(dayRoutine => {
     const period = dayRoutine.periods.find(p => p.periodNumber === periodNumber);
+
     if (period) {
       period.startTime = updateData.startTime ?? period.startTime;
       period.endTime = updateData.endTime ?? period.endTime;
       period.isBreak = updateData.isBreak ?? period.isBreak;
     }
-  });
+   });
 
   await routine.save();
   return routine;
@@ -216,7 +232,8 @@ const addOrUpdateManySubjectsInRoutine = async (payload: ManyRoutinePayload) => 
     periods = [],
     routine = [],
     addedStudents = [],
-    superVisor,
+    superVisors = null,
+    removeSupervisors = null
   } = payload;
 
   if (!schoolId || !classId || !section) {
@@ -358,14 +375,45 @@ const addOrUpdateManySubjectsInRoutine = async (payload: ManyRoutinePayload) => 
     // -----------------------------
     // STEP 4: Update supervisor if provided
     // -----------------------------
-    if (superVisor && superVisor.teacherId && superVisor.teacherName) {
-      await ClassSectionSupervisorService.addOrUpdateSupervisor({
-        classId,
-        className,
-        section,
-        teacherId: superVisor.teacherId,
-        teacherName: superVisor.teacherName,
-      });
+    // if (superVisor && superVisor.teacherId && superVisor.teacherName) {
+    //   await ClassSectionSupervisorService.addOrUpdateSupervisor({
+    //     classId,
+    //     className,
+    //     section,
+    //     teacherId: superVisor.teacherId,
+    //     teacherName: superVisor.teacherName,
+    //   });
+    // }
+
+
+    // -----------------------------
+    // STEP 4: Add / Remove Supervisors
+    // -----------------------------
+
+    // REMOVE MULTIPLE SUPERVISORS
+    if (payload.removeSupervisors && payload.removeSupervisors.length > 0) {
+      await ClassSectionSupervisor.deleteMany(
+        {
+          classId,
+          className,
+          section,
+          teacherId: { $in: payload.removeSupervisors.map(id => new mongoose.Types.ObjectId(id)) }
+        },
+        { session }
+      );
+    }
+
+    // ADD MULTIPLE SUPERVISORS
+    if (superVisors && superVisors.length > 0) {
+      await ClassSectionSupervisorService.addMultipleSupervisors(
+        {
+          classId,
+          className,
+          section,
+          supervisors: superVisors,
+        },
+        session
+      );
     }
 
     // -----------------------------
@@ -384,6 +432,8 @@ const addOrUpdateManySubjectsInRoutine = async (payload: ManyRoutinePayload) => 
     throw error;
   }
 };
+
+
 
 
 
@@ -552,6 +602,13 @@ const getTodayUpcomingClasses = async (
 
       // 4) Unwind periods
       { $unwind: "$routines.periods" },
+      // (NEW) Remove break periods + unassigned subjects
+      {
+        $match: {
+          "routines.periods.isBreak": { $ne: true },
+          "routines.periods.subjectId": { $ne: null },
+        },
+      },
 
       // 5) Teacher-specific match
       ...(user.role === USER_ROLE.teacher
@@ -589,13 +646,15 @@ const getTodayUpcomingClasses = async (
       // 8) Lookup teacher
       {
         $lookup: {
-          from: "teachers",
+          from: "users",
           localField: "routines.periods.teacherId",
           foreignField: "_id",
-          as: "teacher",
+          as: "user",
         },
       },
-      { $unwind: { path: "$teacher", preserveNullAndEmptyArrays: true } },
+      { $unwind: { path: "$user", preserveNullAndEmptyArrays: true } },
+
+
 
       // 9) Lookup class info
       {
@@ -675,7 +734,12 @@ const getTodayUpcomingClasses = async (
             $ifNull: ["$subject.subjectName", "$routines.periods.subjectName"],
           },
 
-
+          teacherId: {
+            $ifNull: ["$user._id", "$routines.periods.teacherId"],
+          },
+          teacherName: {
+            $ifNull: ["$user.name", "$routines.periods.teacherName"],
+          },
           startTime: "$routines.periods.startTime",
           endTime: "$routines.periods.endTime",
           totalStudents: { $size: "$matchedStudents" },
@@ -705,6 +769,107 @@ const getTodayUpcomingClasses = async (
   // Meta for pagination
   // ------------------------------
   const meta = await upcomingQuery.countTotal(ClassRoutine);
+
+  return { meta, result };
+};
+
+const getClassScheduleByDay = async (
+  user: TAuthUser,
+  query: Record<string, unknown>
+) => {
+  if (user.role !== USER_ROLE.student) {
+    throw new AppError(httpStatus.FORBIDDEN, "Only students can access this");
+  }
+
+  // -----------------------------
+  // DAY LOGIC (NO DATE)
+  // -----------------------------
+  const today =
+    (query.today as string)?.toLowerCase() ||
+    dayjs().format("dddd").toLowerCase();
+
+  // -----------------------------
+  // STUDENT CLASS INFO
+  // -----------------------------
+  const student = await StudentService.findStudent(user.studentId);
+  if (!student) throw new AppError(404, "Student not found");
+
+  const matchStage = {
+    schoolId: new mongoose.Types.ObjectId(String(user.mySchoolId)),
+    classId: new mongoose.Types.ObjectId(String(student.classId)),
+    section: student.section,
+  };
+
+  const scheduleQuery = new AggregationQueryBuilder(query);
+
+  // -----------------------------
+  // PIPELINE
+  // -----------------------------
+  const result = await scheduleQuery
+    .customPipeline([
+      { $match: matchStage },
+
+      { $unwind: "$routines" },
+      { $match: { "routines.day": today } },
+
+      { $unwind: "$routines.periods" },
+
+      // Remove breaks + empty subjects
+      {
+        $match: {
+          "routines.periods.isBreak": { $ne: true },
+          "routines.periods.subjectId": { $ne: null },
+        },
+      },
+
+      // SUBJECT NAME
+      {
+        $lookup: {
+          from: "subjects",
+          localField: "routines.periods.subjectId",
+          foreignField: "_id",
+          as: "subject",
+        },
+      },
+      { $unwind: { path: "$subject", preserveNullAndEmptyArrays: true } },
+
+      // CLASS NAME
+      {
+        $lookup: {
+          from: "classes",
+          localField: "classId",
+          foreignField: "_id",
+          as: "classInfo",
+        },
+      },
+      { $unwind: { path: "$classInfo", preserveNullAndEmptyArrays: true } },
+
+      // FINAL PROJECT (ONLY REQUIRED FIELDS)
+      {
+        $project: {
+          _id: 0,
+
+          day: "$routines.day",
+          periodNumber: "$routines.periods.periodNumber",
+
+          startTime: "$routines.periods.startTime",
+          endTime: "$routines.periods.endTime",
+
+          classId: 1,
+          className: "$classInfo.className",
+          section: 1,
+
+          subjectName: {
+            $ifNull: ["$subject.subjectName", "$routines.periods.subjectName"],
+          },
+        },
+      },
+    ])
+    .sort()
+    .paginate()
+    .execute(ClassRoutine);
+
+  const meta = await scheduleQuery.countTotal(ClassRoutine);
 
   return { meta, result };
 };
@@ -1535,5 +1700,7 @@ export const ClassRoutineService = {
   getTodayClassListByClassAndSection,
   getHistoryClassListOfSpecificClassAndSectionByDate,
   getTodayClassListForSchoolAdmin,
-  getHistoryClassListForSchoolAdminByDate
+  getHistoryClassListForSchoolAdminByDate,
+  getClassScheduleByDay,
+  getRoutineByToken
 };

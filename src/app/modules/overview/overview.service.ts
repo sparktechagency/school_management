@@ -176,15 +176,17 @@ import Class from '../class/class.model';
 
 
 const getTeacherHomePageOverview = async (user: TAuthUser) => {
-  const day = new Date().toLocaleString("en-US", { weekday: "long" }).toLowerCase();
+const day = new Date("Saturday").toLocaleString("en-US", {
+  weekday: "long",
+}).toLowerCase();
 
-  console.log("day ===>>> ",day);
+console.log("day ===>>> ", day);
 
-  const today = new Date();
-  today.setUTCHours(0, 0, 0, 0);
+const today = new Date();
+today.setHours(0, 0, 0, 0);
 
   // Supervisor classes
-  const supervisorClasses = await ClassSectionSupervisorService.getMySupervisorsClasses(user.teacherId);
+  const supervisorClasses = await ClassSectionSupervisorService.getMySupervisorsClasses(user.userId);
 
   const classFilters = supervisorClasses.map((cls: any) => ({
     classId: cls.classId,
@@ -441,7 +443,11 @@ const getDailyWeeklyMonthlyAttendanceRateOfSchool = async (schoolId: string) => 
 };
 
 const getAssignmentCount = async (user: TAuthUser) => {
+
+
   const teacher = await TeacherService.findTeacher(user);
+
+    console.log("assignment count ==>> ", {user, teacher});
 
   if (!teacher || !teacher._id) {
     throw new Error('Teacher not found or invalid teacher data');
@@ -450,6 +456,12 @@ const getAssignmentCount = async (user: TAuthUser) => {
   // Use teacher._id instead of teacher.schoolId for teacherId field
   const schoolId = new mongoose.Types.ObjectId(String(teacher.schoolId));
 
+  console.log("this is school id =>>> ",{
+      schoolId,
+      teacherId: new mongoose.Types.ObjectId(user.userId),
+      status: 'on-going',
+    })
+
   // Calculate date for last week
   const lastWeekDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
@@ -457,16 +469,19 @@ const getAssignmentCount = async (user: TAuthUser) => {
   const [activeAssignment, assignmentThisWeek] = await Promise.all([
     Assignment.countDocuments({
       schoolId,
-      teacherId: user.userId,
+      teacherId: new mongoose.Types.ObjectId(user.userId),
       status: 'on-going',
     }),
+
     Assignment.countDocuments({
       schoolId,
-      teacherId: user.userId,
+      teacherId: new mongoose.Types.ObjectId(user.userId),
       status: "completed",
       dueDate: { $gte: lastWeekDate },
     }),
   ]);
+
+  console.log({activeAssignment, assignmentThisWeek});
 
   return {
     activeAssignment: activeAssignment || 0,
@@ -529,100 +544,287 @@ const getStudentAttendance = async (
   return formattedResult;
 };
 
+// const getStudentHomePageOverview = async (user: TAuthUser) => {
+//   const studentId = user.studentId;
+
+//   // Get current day name
+//   const dayName = [
+//     'sunday',
+//     'monday',
+//     'tuesday',
+//     'wednesday',
+//     'thursday',
+//     'friday',
+//     'saturday',
+//   ][new Date().getDay()];
+
+//   // Fetch student profile once
+//   const studentProfile = await StudentService.findStudent(studentId);
+//   if (!studentProfile) throw new Error('Student profile not found');
+
+//   const { schoolId, classId, className, section  } = studentProfile;
+
+//   // Prepare date range
+//   const today = new Date();
+//   today.setUTCHours(0, 0, 0, 0);
+
+//   const last30Days = new Date(today);
+//   last30Days.setUTCDate(today.getUTCDate() - 30);
+
+//   // Prepare ObjectIds once
+//   const schoolObjectId = new mongoose.Types.ObjectId(String(schoolId));
+//   const studentObjectId = new mongoose.Types.ObjectId(String(studentId));
+//   const classObjectId = new mongoose.Types.ObjectId(String(classId));
+//   // Run all parallel queries
+//   const [routineDoc, attendanceRecords, assignmentDueCount, gpaResult] =
+//     await Promise.all([
+//       // ClassSchedule.countDocuments({
+//       //   schoolId,
+//       //   classId,
+//       //   days: dayName,
+//       // }),
+//       ClassRoutine.findOne({
+//         schoolId,
+//         classId,
+//         section,
+//       }).lean(),
+
+//       // Attendance.aggregate([
+//       //   {
+//       //     $match: {
+//       //       schoolId: schoolObjectId,
+//       //       classId: classObjectId,
+//       //       date: { $gte: last30Days },
+//       //     },
+//       //   },
+//       //   {
+//       //     $project: {
+//       //       presentStudents: 1,
+//       //     },
+//       //   },
+//       // ]),
+
+//       Attendance.find({
+//         schoolId,
+//         classId,
+//         date: { $gte: last30Days },
+//         isAttendance: true, // Only valid attendance
+//       })
+//         .select("presentStudents date")
+//         .lean(),
+
+//       Assignment.countDocuments({
+//         schoolId,
+//         classId,
+//         status: 'on-going',
+//       }),
+
+//       Result.aggregate([
+//         { $match: { schoolId: schoolObjectId } },
+//         { $unwind: '$students' },
+//         { $match: { 'students.studentId': studentObjectId } },
+//         {
+//           $group: {
+//             _id: null,
+//             cgpa: { $avg: '$students.gpa' },
+//           },
+//         },
+//         {
+//           $project: {
+//             _id: 0,
+//             cgpa: 1,
+//           },
+//         },
+//       ]),
+//     ]);
+
+
+//   // ================================
+//   // 1️⃣ TODAY'S CLASS COUNT (NO BREAKS)
+//   // ================================
+//   let todaysClass = 0;
+
+//   if (routineDoc) {
+//     const todayRoutine = routineDoc.routines.find(
+//       (d) => d.day.toLowerCase() === dayName
+//     );
+
+//     if (todayRoutine) {
+//       todaysClass = todayRoutine.periods.filter((p) => !p.isBreak).length;
+//     }
+//   }
+
+//   // ==================================
+//   // 2️⃣ ATTENDANCE CALCULATION (LAST 30 DAYS)
+//   // ==================================
+//   const groupedDays = new Map(); // avoid counting same day multiple periods
+
+//   attendanceRecords.forEach((record) => {
+//     const dateKey = record.date.toISOString().split("T")[0];
+
+//     if (!groupedDays.has(dateKey)) {
+//       groupedDays.set(dateKey, {
+//         present: record.presentStudents.some(
+//           (s) => s.studentId.toString() === studentId
+//         ),
+//       });
+//     }
+//   });
+
+//   const totalDays = groupedDays.size;
+//   const presentDays = [...groupedDays.values()].filter((d) => d.present).length;
+
+//   const attendanceRate =
+//     totalDays > 0 ? Math.round((presentDays / totalDays) * 10000) / 100 : 0;
+
+//   return {
+//     todaysClass,
+//     attendanceRate,
+//     assignmentDue: assignmentDueCount,
+//     gpa: gpaResult[0]?.cgpa || 0,
+//   };
+// };
+
+
 const getStudentHomePageOverview = async (user: TAuthUser) => {
   const studentId = user.studentId;
 
-  // Get current day name
+  // Today name
   const dayName = [
-    'sunday',
-    'monday',
-    'tuesday',
-    'wednesday',
-    'thursday',
-    'friday',
-    'saturday',
+    "sunday",
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
   ][new Date().getDay()];
 
-  // Fetch student profile once
+  // Student profile
   const studentProfile = await StudentService.findStudent(studentId);
-  if (!studentProfile) throw new Error('Student profile not found');
+  if (!studentProfile) throw new Error("Student profile not found");
 
-  const { schoolId, classId, className } = studentProfile;
+  const { schoolId, classId, className, section } = studentProfile;
 
-  // Prepare date range
   const today = new Date();
   today.setUTCHours(0, 0, 0, 0);
 
   const last30Days = new Date(today);
   last30Days.setUTCDate(today.getUTCDate() - 30);
 
-  // Prepare ObjectIds once
   const schoolObjectId = new mongoose.Types.ObjectId(String(schoolId));
   const studentObjectId = new mongoose.Types.ObjectId(String(studentId));
+  const classObjectId = new mongoose.Types.ObjectId(String(classId));
 
-  // Run all parallel queries
-  const [todaysClassCount, attendanceRecords, assignmentDueCount, gpaResult] =
+  // Parallel fetch
+  const [routineDoc, attendanceRecords, assignmentDueCount, gpaResult] =
     await Promise.all([
-      ClassSchedule.countDocuments({
+      ClassRoutine.findOne({
         schoolId,
         classId,
-        days: dayName,
-      }),
+        section,
+      }).lean(),
 
-      Attendance.aggregate([
-        {
-          $match: {
-            schoolId: schoolObjectId,
-            className,
-            date: { $gte: last30Days },
-          },
-        },
-        {
-          $project: {
-            presentStudents: 1,
-          },
-        },
-      ]),
+      Attendance.find({
+        schoolId,
+        classId,
+        date: { $gte: last30Days },
+        isAttendance: true,
+      })
+        .select("presentStudents date periodNumber")
+        .lean(),
 
       Assignment.countDocuments({
         schoolId,
         classId,
-        status: 'on-going',
+        status: "on-going",
       }),
 
       Result.aggregate([
         { $match: { schoolId: schoolObjectId } },
-        { $unwind: '$students' },
-        { $match: { 'students.studentId': studentObjectId } },
-        {
-          $group: {
-            _id: null,
-            cgpa: { $avg: '$students.gpa' },
-          },
-        },
-        {
-          $project: {
-            _id: 0,
-            cgpa: 1,
-          },
-        },
+        { $unwind: "$students" },
+        { $match: { "students.studentId": studentObjectId } },
+        { $group: { _id: null, cgpa: { $avg: "$students.gpa" } } },
+        { $project: { _id: 0, cgpa: 1 } },
       ]),
     ]);
 
-  // Calculate attendance
-  const totalDays = attendanceRecords.length;
-  const presentCount = attendanceRecords.reduce((count, record) => {
-    const isPresent = record.presentStudents.some(
-      (student: any) => student.studentId.toString() === studentId,
+  // =======================================
+  // 1️⃣ TODAY'S CLASS COUNT (subject & teacher required)
+  // =======================================
+  let todaysClass = 0;
+
+  if (routineDoc) {
+    const todayRoutine = routineDoc.routines.find(
+      (r) => r.day.toLowerCase() === dayName
     );
-    return isPresent ? count + 1 : count;
-  }, 0);
 
-  const attendanceRate = totalDays > 0 ? (presentCount / totalDays) * 100 : 0;
+    if (todayRoutine) {
+      todaysClass = todayRoutine.periods.filter(
+        (p) =>
+          !p.isBreak && // skip break
+          p.subjectId && // subject must exist
+          p.teacherId // teacher must exist
+      ).length;
+    }
+  }
 
+  // ============================================
+  // 2️⃣ ATTENDANCE RATE (day present if >= 50% present)
+  // ============================================
+
+  // Group attendance by date
+  const dayWise = new Map();
+
+  attendanceRecords.forEach((record) => {
+    const dateKey = record.date.toISOString().split("T")[0];
+
+    if (!dayWise.has(dateKey)) {
+      dayWise.set(dateKey, {
+        totalPeriods: 0,
+        presentPeriods: 0,
+      });
+    }
+
+    const dayData = dayWise.get(dateKey);
+
+    dayData.totalPeriods++;
+
+    const isPresent = record.presentStudents.some(
+      (s) => s.studentId.toString() === studentId
+    );
+
+    if (isPresent) dayData.presentPeriods++;
+
+    dayWise.set(dateKey, dayData);
+  });
+
+  // Determine present days
+  let presentDays = 0;
+
+  for (const [date, d] of dayWise.entries()) {
+    const { totalPeriods, presentPeriods } = d;
+
+    const required = totalPeriods / 2;
+
+    if (presentPeriods >= required) {
+      presentDays++;
+    }
+  }
+
+  const totalDays = dayWise.size;
+
+  const attendanceRate =
+    totalDays > 0
+      ? Math.round((presentDays / totalDays) * 10000) / 100
+      : 0;
+
+  // ==========================
+  // Final response
+  // ==========================
   return {
-    todaysClass: todaysClassCount,
-    attendanceRate: Math.round(attendanceRate * 100) / 100,
+    todaysClass,
+    attendanceRate,
     assignmentDue: assignmentDueCount,
     gpa: gpaResult[0]?.cgpa || 0,
   };

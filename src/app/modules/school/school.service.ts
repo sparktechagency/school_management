@@ -184,11 +184,11 @@ const editSchool = async (
 
 const deleteSchool = async (schoolId: string) => {
   const result = transactionWrapper(async (session) => {
-    const result = await School.findByIdAndDelete(schoolId, { session });
+    const result = await School.findByIdAndUpdate(schoolId,{isDeleted: true},{ session });
 
     if (!result) throw new Error('School not deleted');
 
-    await User.findOneAndDelete({ schoolId }, { session });
+    await User.findOneAndUpdate({ schoolId },{isDeleted: true}, { session });
   });
   return result;
 };
@@ -203,11 +203,18 @@ const updateSchoolBlockStatus = async (schoolId: string) => {
 
   // Toggle the block status
   const newStatus = !school.isBlocked;
+  let activeStatus;
+  if(newStatus === true) {
+    activeStatus = false;
+  }
+  else{
+    activeStatus = true;
+  }
 
   // Update the school with the toggled value
   const updatedSchool = await School.findByIdAndUpdate(
     schoolId,
-    { isBlocked: newStatus },
+    { isBlocked: newStatus, isActive: activeStatus },
     { new: true }
   );
 

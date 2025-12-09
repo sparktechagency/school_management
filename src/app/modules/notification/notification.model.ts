@@ -16,7 +16,7 @@ const notificationSchema = new Schema<TNotification>(
     senderName: { type: String},
     linkId: {
       type: Schema.Types.ObjectId,
-      required: [true, 'Link id is required'],
+      // required: [true, 'Link id is required'],
     },
     role: { type: String, required: [true, 'Role is required'] },
     type: { type: String, required: [true, 'Type is required'] },

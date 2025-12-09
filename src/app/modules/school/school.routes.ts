@@ -25,7 +25,7 @@ router
 
   .get(
     "/all",
-    auth(USER_ROLE.admin, USER_ROLE.supperAdmin),
+    // auth(USER_ROLE.admin, USER_ROLE.supperAdmin, ),
     SchoolController.getAllSchools
   )
 

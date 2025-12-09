@@ -14,6 +14,7 @@ router
     validateRequest(PaymentValidation.paymentValidation),
     PaymentController.makePayment,
   )
+  
   .get('/confirm-payment', PaymentController.confirmPayment)
   .get('/failed-payment', PaymentController.failedPayment)
   .get(
