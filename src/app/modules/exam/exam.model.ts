@@ -38,6 +38,7 @@ const examSchema = new Schema<TExam>(
       required: true,
       trim: true,
     },
+    
     passGrade: {
       type: Number,
       required: true,

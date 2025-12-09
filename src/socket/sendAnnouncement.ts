@@ -5,9 +5,13 @@ import { IO } from '../server';
 
 const sendAnnouncement = async (payload: TAnnouncement | any) => {
   try {
+
     const { receiverId } = payload;
 
     const connectUser: any = connectedUser.get(receiverId.toString());
+
+    
+
     if (connectUser) {
       IO.to(connectUser.socketId).emit('announcement', {
         success: true,

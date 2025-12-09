@@ -99,8 +99,11 @@ export interface ManyRoutinePayload {
     fatherPhoneNumber: string;
     motherPhoneNumber: string;
   }[];
-  superVisor?: {
+  superVisors?: [{
     teacherId: string;
     teacherName: string;
-  } | null;
+  } ] | null;
+  removeSupervisors?: [
+    string
+  ] | null
 }

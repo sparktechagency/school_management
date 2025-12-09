@@ -176,15 +176,17 @@ import Class from '../class/class.model';
 
 
 const getTeacherHomePageOverview = async (user: TAuthUser) => {
-  const day = new Date().toLocaleString("en-US", { weekday: "long" }).toLowerCase();
+const day = new Date("Saturday").toLocaleString("en-US", {
+  weekday: "long",
+}).toLowerCase();
 
-  console.log("day ===>>> ",day);
+console.log("day ===>>> ", day);
 
-  const today = new Date();
-  today.setUTCHours(0, 0, 0, 0);
+const today = new Date();
+today.setHours(0, 0, 0, 0);
 
   // Supervisor classes
-  const supervisorClasses = await ClassSectionSupervisorService.getMySupervisorsClasses(user.teacherId);
+  const supervisorClasses = await ClassSectionSupervisorService.getMySupervisorsClasses(user.userId);
 
   const classFilters = supervisorClasses.map((cls: any) => ({
     classId: cls.classId,
@@ -441,7 +443,11 @@ const getDailyWeeklyMonthlyAttendanceRateOfSchool = async (schoolId: string) => 
 };
 
 const getAssignmentCount = async (user: TAuthUser) => {
+
+
   const teacher = await TeacherService.findTeacher(user);
+
+    console.log("assignment count ==>> ", {user, teacher});
 
   if (!teacher || !teacher._id) {
     throw new Error('Teacher not found or invalid teacher data');
@@ -450,6 +456,12 @@ const getAssignmentCount = async (user: TAuthUser) => {
   // Use teacher._id instead of teacher.schoolId for teacherId field
   const schoolId = new mongoose.Types.ObjectId(String(teacher.schoolId));
 
+  console.log("this is school id =>>> ",{
+      schoolId,
+      teacherId: new mongoose.Types.ObjectId(user.userId),
+      status: 'on-going',
+    })
+
   // Calculate date for last week
   const lastWeekDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
@@ -457,16 +469,19 @@ const getAssignmentCount = async (user: TAuthUser) => {
   const [activeAssignment, assignmentThisWeek] = await Promise.all([
     Assignment.countDocuments({
       schoolId,
-      teacherId: user.userId,
+      teacherId: new mongoose.Types.ObjectId(user.userId),
       status: 'on-going',
     }),
+
     Assignment.countDocuments({
       schoolId,
-      teacherId: user.userId,
+      teacherId: new mongoose.Types.ObjectId(user.userId),
       status: "completed",
       dueDate: { $gte: lastWeekDate },
     }),
   ]);
+
+  console.log({activeAssignment, assignmentThisWeek});
 
   return {
     activeAssignment: activeAssignment || 0,

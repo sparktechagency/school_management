@@ -23,6 +23,10 @@ import AppError from '../../utils/AppError';
 import httpStatus from 'http-status';
 import dayjs from 'dayjs';
 import Attendance from '../attendance/attendance.model';
+import { StudentNote } from '../studentNote/studentNote.model';
+import { StudentReport } from '../studentReport/studentReport.model';
+import { NOTIFICATION_TYPE } from '../notification/notification.interface';
+import sendNotification from '../../../socket/sendNotification';
 
 const createStudent = async (
   payload: Partial<TStudent> & { phoneNumber: string; name?: string },
@@ -575,7 +579,7 @@ const createStudentWithXlsx = async (file: MulterFile) => {
 // ==========================
 // TERMINATE STUDENT
 // ==========================
-const terminateStudentByTeacher = async (payload: TerminateStudentPayload) => {
+const terminateStudentByTeacher = async (user: any, payload: TerminateStudentPayload) => {
   const { studentId, terminateBy, terminatedDays} = payload;
 
  
@@ -608,6 +612,18 @@ const terminateStudentByTeacher = async (payload: TerminateStudentPayload) => {
 
   await student.save();
 
+     
+  const notificationData = {
+    message: `Your student status has been terminated. Kindly visit the school administration for details.`,
+    role: user.role,
+    type: NOTIFICATION_TYPE.TERMINATE,
+    senderId: user.userId,
+    receiverId: student.userId,
+    senderName: user?.name || 'Unknown',
+  };
+
+  await sendNotification(user as TAuthUser, notificationData);
+
   return student;
 };
 
@@ -615,7 +631,7 @@ const terminateStudentByTeacher = async (payload: TerminateStudentPayload) => {
 // ==========================
 // REMOVE TERMINATION
 // ==========================
-const removeTermination= async (payload: RemoveTerminationPayload) => {
+const removeTermination= async (user: any, payload: RemoveTerminationPayload) => {
   const { studentId, removedBy } = payload;
 
   // Validate input
@@ -646,6 +662,18 @@ const removeTermination= async (payload: RemoveTerminationPayload) => {
 
   await student.save();
 
+     
+  const notificationData = {
+    message: `Your termination has been removed. Your enrollment is now active again.`,
+    role: user.role,
+    type: NOTIFICATION_TYPE.TERMINATE,
+    senderId: user.userId,
+    receiverId: student.userId,
+    senderName: user?.name || 'Unknown',
+  };
+
+  await sendNotification(user as TAuthUser, notificationData);
+
   return student;
 };
 
@@ -653,7 +681,7 @@ const removeTermination= async (payload: RemoveTerminationPayload) => {
 // ==========================
 // SUMMON STUDENT
 // ==========================
-const summonStudent = async (payload: SummonStudentPayload) => {
+const summonStudent = async (user: any,payload: SummonStudentPayload) => {
 
   const { studentId, summonedBy } = payload;
 
@@ -690,6 +718,69 @@ const summonStudent = async (payload: SummonStudentPayload) => {
   });
 
   // Save updated student
+  await student.save();
+
+   
+  const notificationData = {
+    message: `${user?.name} has summoned you. Please come to the office immediately.`,
+    role: user.role,
+    type: NOTIFICATION_TYPE.SUMMONED,
+    senderId: user.userId,
+    receiverId: student.userId,
+    senderName: user?.name || 'Unknown',
+  };
+
+  await sendNotification(user as TAuthUser, notificationData);
+
+  return student;
+};
+
+
+const removeSummoned = async (payload: RemoveTerminationPayload) => {
+  const { studentId, removedBy } = payload;
+
+  // Validate input
+  if (!studentId || !removedBy) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      "studentId and removedBy are required"
+    );
+  }
+
+  console.log("removeSummoned",{removedBy});
+
+  const studentObjectId = new mongoose.Types.ObjectId(studentId);
+  const removedByObjectId = new mongoose.Types.ObjectId(removedBy);
+
+  console.log({studentObjectId, removedByObjectId});
+  // Find student
+  const student = await Student.findById(studentObjectId);
+
+  console.log("student", {student});
+
+  if (!student) {
+    throw new AppError(httpStatus.NOT_FOUND, "Student not found");
+  }
+
+  // If not summoned, no need to remove
+  if (!student.summoned) {
+    return student;
+  }
+
+  // Mark summon removed
+  student.summoned = false;
+
+  // Update last summon history
+  const history = student.summonedHistory;
+
+  console.log("history  ",{history});
+
+  if (history.length > 0) {
+    const lastRecord = history[history.length - 1];
+    lastRecord.removedBy = removedByObjectId as any;
+    lastRecord.removedTime = new Date();
+  }
+
   await student.save();
 
   return student;
@@ -754,6 +845,22 @@ const getSpecificStudentReport = async (studentId: string) => {
 
   if (!student) throw new Error("Student not found");
 
+    // --- Fetch Student Notes ---
+  const notes = await StudentNote.find({
+    studentId: new mongoose.Types.ObjectId(studentId),
+  })
+    .populate("noteBy", "name").select("noteBy text createdAt")
+    .sort({ createdAt: -1 })
+    .lean()  || [];
+
+  // --- Fetch Student Reports ---
+  const reports = await StudentReport.find({
+    studentId: new mongoose.Types.ObjectId(studentId),
+  })
+    .populate("reportId", "name").select("reportId text createdAt")
+    .sort({ createdAt: -1 })
+    .lean() || [];
+
   const { classId, section, schoolId } = student;
 
   // 2. Auto detect current month
@@ -786,6 +893,8 @@ const getSpecificStudentReport = async (studentId: string) => {
       totalPresentDays: 0,
       totalAbsentDays: 0,
       dayList: [],
+      studentNotes: notes || [],
+      studentReports: reports || [],
     };
   }
 
@@ -858,6 +967,8 @@ const getSpecificStudentReport = async (studentId: string) => {
     totalAbsentDays,
 
     dayList,
+    studentNotes: notes || [],
+      studentReports: reports || [],
   };
 };
 
@@ -878,6 +989,7 @@ export const StudentService = {
   terminateStudentByTeacher,
   removeTermination,
   summonStudent,
+  removeSummoned,
   getAllStudentsListOfSchool,
   getAllTerminatedStudentsBySchool,
   getAllSummonedStudentBySchool,

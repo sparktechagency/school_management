@@ -89,7 +89,9 @@ const socketIO = (io: Server) => {
     socket.on(
       'send_message',
       async (payload: Partial<TMessage & { receiverId: string }>, callback) => {
+        
         try {
+
           if (!payload.conversationId) {
             return callback?.({ success: false, message: 'Invalid payload' });
           }

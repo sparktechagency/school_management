@@ -2,7 +2,6 @@ import { Schema, model, Types } from 'mongoose';
 import { IClassSectionSupervisor } from './classSectionSupervisor.interface';
 
 
-
 const classSectionSupervisorSchema = new Schema<IClassSectionSupervisor>(
   {
     classId: {
@@ -22,14 +21,14 @@ const classSectionSupervisorSchema = new Schema<IClassSectionSupervisor>(
     },
     teacherId: {
       type: Schema.Types.ObjectId,
-      ref: 'Teacher',
+      ref: "Teacher",
       required: true,
     },
     teacherName: {
       type: String,
       required: true,
       trim: true,
-    },
+    }
   },
   {
     timestamps: true,

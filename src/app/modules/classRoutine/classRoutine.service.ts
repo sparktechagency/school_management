@@ -13,6 +13,9 @@ import { StudentService } from "../student/student.service";
 import { AssignedSubjectTeacherService } from "../assignedSubjectTeacher/assignedSubjectTeacher.service";
 import { ClassSectionSupervisorService } from "../classSectionSuperVisor/classSectionSupervisor.service";
 import { ClassSectionSupervisor } from "../classSectionSuperVisor/classSectionSupervisor.model";
+import config from "../../../config";
+import { JwtPayload, Secret } from "jsonwebtoken";
+import { decodeToken } from "../../utils/decodeToken";
 
 const getRoutineByClassAndSection = async (classId: string, section: string) => {
   const routine = await ClassRoutine.findOne({ classId, section: section.toUpperCase() });
@@ -21,16 +24,28 @@ const getRoutineByClassAndSection = async (classId: string, section: string) => 
     throw new Error(`Routine not found for class ${classId} and section ${section}`);
   }
 
-  const supervisor = await ClassSectionSupervisor.findOne({
+  const supervisor = await ClassSectionSupervisor.find({
     classId,
     section: section.toUpperCase(),
   }).select('teacherId teacherName').lean(); // null if not found
 
   return {  
     routine,
-    supervisor: supervisor || null,
+    supervisors: supervisor || [],
   };
 };
+
+const getRoutineByToken = async (classId: string, section: string) => {
+  const routine = await ClassRoutine.findOne({ classId, section: section.toUpperCase() });
+
+  if (!routine) {
+    throw new Error(`Routine not found for class ${classId} and section ${section}`);
+  }
+
+
+  return routine;
+};
+
 
 
 const addPeriodToClassRoutine = async (
@@ -217,7 +232,8 @@ const addOrUpdateManySubjectsInRoutine = async (payload: ManyRoutinePayload) => 
     periods = [],
     routine = [],
     addedStudents = [],
-    superVisor,
+    superVisors = null,
+    removeSupervisors = null
   } = payload;
 
   if (!schoolId || !classId || !section) {
@@ -359,14 +375,45 @@ const addOrUpdateManySubjectsInRoutine = async (payload: ManyRoutinePayload) => 
     // -----------------------------
     // STEP 4: Update supervisor if provided
     // -----------------------------
-    if (superVisor && superVisor.teacherId && superVisor.teacherName) {
-      await ClassSectionSupervisorService.addOrUpdateSupervisor({
-        classId,
-        className,
-        section,
-        teacherId: superVisor.teacherId,
-        teacherName: superVisor.teacherName,
-      });
+    // if (superVisor && superVisor.teacherId && superVisor.teacherName) {
+    //   await ClassSectionSupervisorService.addOrUpdateSupervisor({
+    //     classId,
+    //     className,
+    //     section,
+    //     teacherId: superVisor.teacherId,
+    //     teacherName: superVisor.teacherName,
+    //   });
+    // }
+
+
+    // -----------------------------
+    // STEP 4: Add / Remove Supervisors
+    // -----------------------------
+
+    // REMOVE MULTIPLE SUPERVISORS
+    if (payload.removeSupervisors && payload.removeSupervisors.length > 0) {
+      await ClassSectionSupervisor.deleteMany(
+        {
+          classId,
+          className,
+          section,
+          teacherId: { $in: payload.removeSupervisors.map(id => new mongoose.Types.ObjectId(id)) }
+        },
+        { session }
+      );
+    }
+
+    // ADD MULTIPLE SUPERVISORS
+    if (superVisors && superVisors.length > 0) {
+      await ClassSectionSupervisorService.addMultipleSupervisors(
+        {
+          classId,
+          className,
+          section,
+          supervisors: superVisors,
+        },
+        session
+      );
     }
 
     // -----------------------------
@@ -385,6 +432,8 @@ const addOrUpdateManySubjectsInRoutine = async (payload: ManyRoutinePayload) => 
     throw error;
   }
 };
+
+
 
 
 
@@ -1652,5 +1701,6 @@ export const ClassRoutineService = {
   getHistoryClassListOfSpecificClassAndSectionByDate,
   getTodayClassListForSchoolAdmin,
   getHistoryClassListForSchoolAdminByDate,
-  getClassScheduleByDay
+  getClassScheduleByDay,
+  getRoutineByToken
 };

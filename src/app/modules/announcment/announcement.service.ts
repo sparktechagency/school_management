@@ -48,6 +48,9 @@ const createAnnouncement = async (
     ]),
   ]);
 
+
+  // console.log('allReceivers', allReceivers);
+
   const receivers =
     payload.announcementTo === 'student'
       ? allStudent
@@ -57,6 +60,7 @@ const createAnnouncement = async (
 
   // Send notifications to all receivers
   const notificationPromises = receivers.map(async (item) => {
+    console.log('item ===>>>> ', item);
     const receiverId = item.userId || item._id || item._doc?.userId;
 
     const notificationData = {
@@ -70,19 +74,39 @@ const createAnnouncement = async (
       senderName: user.name,
     };
 
+
+
     await sendNotification(user, notificationData);
+    
   });
 
-  await Promise.all([
-    sendAnnouncement(newAnnouncement),
+    // Send realtime announcements to each receiver
+  const realtimeAnnouncementPromises = receivers.map((receiver) => {
+    const receiverId = receiver.userId || receiver._id || receiver._doc?.userId;
+
+    return sendAnnouncement({
+      ...newAnnouncement.toObject(),
+      receiverId,
+    });
+  });
+
+  try {
+    await Promise.all([
+    ...realtimeAnnouncementPromises,
     ...notificationPromises,
   ]);
+  } catch (error) {
+    console.log("error", error);
+  }
+  
 };
 
 const getAllAnnouncements = async (
   user: TAuthUser,
   query: Record<string, unknown>,
 ) => {
+
+
   const schoolId = getSchoolIdFromUser(user);
 
   const matchStage: Record<string, unknown> = { schoolId };
@@ -96,6 +120,9 @@ const getAllAnnouncements = async (
     matchStage.announcementTo = 'parents';
   }
 
+  console.log("matchStage", matchStage);
+  console.log("query", query);
+
   const announcementQuery = new QueryBuilder(
     Announcement.find(matchStage),
     query,
@@ -103,6 +130,7 @@ const getAllAnnouncements = async (
 
   const result = await announcementQuery.sort().search(['title']).paginate()
     .queryModel;
+
 
   const meta = await announcementQuery.countTotal();
 

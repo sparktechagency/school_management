@@ -396,6 +396,9 @@ const getExamSchedule = async (
 };
 
 const getGradesResult = async (user: TAuthUser, examId: string) => {
+
+  console.log("user and exam data ==>>> ",{user, examId});
+  
   const result = await Result.aggregate([
     {
       $match: {
@@ -449,6 +452,8 @@ const getGradesResult = async (user: TAuthUser, examId: string) => {
       },
     },
   ]);
+
+  console.log({result})
 
   return result;
 };

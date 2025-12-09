@@ -12,6 +12,12 @@ router
     )
 
     .get(
+        "/Specific_class_section_token",
+        auth(USER_ROLE.student),
+        ClassRoutineController.getRoutineByToken
+    )
+
+    .get(
         "/unique_subjects",
         auth(USER_ROLE.school, USER_ROLE.manager),
         ClassRoutineController.getUniqueSubjectsOfClassRoutine

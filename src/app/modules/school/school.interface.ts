@@ -10,4 +10,5 @@ export type TSchool = {
   coverImage: string;
   isActive: boolean;
   isBlocked: boolean;
+  isDeleted: boolean;
 };

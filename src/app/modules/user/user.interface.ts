@@ -20,6 +20,7 @@ export type TUser = {
   studentId?: ObjectId;
   parentsId?: ObjectId;
   schoolId: ObjectId;
+  mySchoolId?: ObjectId;
   teacherId: ObjectId;
   managerId: ObjectId;
   phoneNumber: string;

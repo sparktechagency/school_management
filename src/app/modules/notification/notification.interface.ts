@@ -14,7 +14,9 @@ type TType =
   | 'custom'
   | 'manager'
   | 'announcement'
-  | 'message';
+  | 'message'
+  | 'summoned'
+  | "terminate";
 
 export const NOTIFICATION_TYPE = {
   ASSIGNMENT: 'assignment',
@@ -31,12 +33,14 @@ export const NOTIFICATION_TYPE = {
   MANAGER: 'manager',
   ANNOUNCEMENT: 'announcement',
   MESSAGE: 'message',
+  SUMMONED: 'summoned',
+  TERMINATE: "terminate",
 } as const;
 
 export type TNotification = {
   senderId: ObjectId;
   receiverId: ObjectId;
-  linkId: ObjectId;
+  linkId?: ObjectId;
   role: string;
   type: TType;
   message: string;

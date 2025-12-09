@@ -11,6 +11,7 @@ import { OtpService } from '../otp/otp.service';
 import { TUser } from '../user/user.interface';
 import User from '../user/user.model';
 import { createUserPayload, getSchoolByRole } from './auth.helper';
+import School from '../school/school.model';
 
 const loginUser = async (payload: Pick<TUser, 'phoneNumber'>) => {
 
@@ -32,6 +33,27 @@ const loginUser = async (payload: Pick<TUser, 'phoneNumber'>) => {
     throw new AppError(httpStatus.FORBIDDEN, 'This user is blocked!');
   }
 
+    const school = await getSchoolByRole(user);
+
+    if (user?.role !== USER_ROLE.admin && user?.role !== USER_ROLE.supperAdmin) {
+
+
+      const isActiveSchool = await School.findById(school?._id);
+
+      if (!isActiveSchool) {
+        throw new AppError(
+          httpStatus.FORBIDDEN,
+          'Your school record was not found. Please contact support.',
+        );
+      }
+
+      if (isActiveSchool.isBlocked) {
+        throw new AppError(
+          httpStatus.FORBIDDEN,
+          'Your school is blocked. Please contact your school administration.',
+        );
+      }
+    }
   // const otp = Math.floor(100000 + Math.random() * 900000);
 
   const otp = 123456;

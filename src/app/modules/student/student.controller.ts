@@ -157,7 +157,7 @@ const terminateStudentByTeacher = catchAsync(async (req, res) => {
     terminateBy: (req.user as TAuthUser).userId, // teacher id
   };
 
-  const result = await StudentService.terminateStudentByTeacher(payload);
+  const result = await StudentService.terminateStudentByTeacher(req.user, payload);
 
   sendResponse(res, {
     success: true,
@@ -210,7 +210,7 @@ const summonStudent = catchAsync(async (req, res) => {
     summonedBy: (req.user as TAuthUser).userId, // teacher/admin performing the action
   };
 
-  const result = await StudentService.summonStudent(payload);
+  const result = await StudentService.summonStudent(req.user,payload);
 
   sendResponse(res, {
     success: true,
@@ -220,6 +220,29 @@ const summonStudent = catchAsync(async (req, res) => {
   });
 });
 
+
+const removeSummoned = catchAsync(async (req, res) => {
+  const { studentId } = req.params;
+
+  if (!studentId) {
+    throw new AppError(httpStatus.BAD_REQUEST, "studentId is required");
+  }
+
+  // removedBy = logged-in teacher/admin
+  const removedBy = (req.user as TAuthUser).userId;
+
+  const result = await StudentService.removeSummoned({
+    studentId,
+    removedBy,
+  });
+
+  sendResponse(res, {
+    success: true,
+    statusCode: httpStatus.OK,
+    message: "Student summon removed successfully",
+    data: result,
+  });
+});
 
 const getTerminatedStudentsBySchool = catchAsync(async (req: Request, res: Response) => {
     
@@ -296,5 +319,6 @@ export const StudentController = {
   summonStudent,
   getTerminatedStudentsBySchool,
   getAllSummonedStudentBySchool,
-  getSpecificStudentReport
+  getSpecificStudentReport,
+  removeSummoned
 };

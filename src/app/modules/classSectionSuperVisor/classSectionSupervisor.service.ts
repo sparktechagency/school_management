@@ -1,6 +1,6 @@
 import { IClassSectionSupervisor } from "./classSectionSupervisor.interface";
 import { ClassSectionSupervisor } from "./classSectionSupervisor.model";
-import mongoose, {  Types } from 'mongoose';
+import mongoose, {  ClientSession, Types } from 'mongoose';
 
 
 const addOrUpdateSupervisor = async (payload: {
@@ -49,6 +49,108 @@ console.log("existingSupervisor===>>> ",existingSupervisor);
   console.log("newSupervisor===>>> ",newSupervisor);
 
   return newSupervisor;
+};
+
+const addMultipleSupervisors = async (
+  payload: {
+    classId: string;
+    className: string;
+    section: string;
+    superVisors: Array<{
+      teacherId: string;
+      teacherName: string;
+    }>;
+    removeSupervisors?: [string];
+  },
+  session?: ClientSession
+): Promise<IClassSectionSupervisor[]> => {
+
+  const { classId, className, section, superVisors } = payload;
+
+  console.log("payload===>>>  ",payload);
+
+    // REMOVE MULTIPLE SUPERVISORS
+    if (payload.removeSupervisors && payload.removeSupervisors.length > 0) {
+      await ClassSectionSupervisor.deleteMany(
+        {
+          classId,
+          className,
+          section,
+          teacherId: { $in: payload.removeSupervisors.map(id => new mongoose.Types.ObjectId(id)) }
+        },
+        { session }
+      );
+    }
+
+  if (!superVisors || superVisors.length === 0) {
+    return [];
+  }
+
+  // Prepare bulk data
+  const insertDocs = superVisors.map(sup => ({
+    classId: new Types.ObjectId(classId),
+    className,
+    section: section.trim(),
+    teacherId: new Types.ObjectId(sup.teacherId),
+    teacherName: sup.teacherName.trim(),
+  }));
+
+  // Insert many in one query
+  const result = await ClassSectionSupervisor.insertMany(
+    insertDocs,
+    session ? { session } : {}
+  );
+
+  return result;
+};
+
+
+
+const removeSupervisor = async (payload: {
+  classId: string;
+  section: string;
+  teacherId: string;
+}) => {
+  const { classId, section, teacherId } = payload;
+
+  const classObjectId = new mongoose.Types.ObjectId(classId);
+
+  const updated = await ClassSectionSupervisor.findOneAndUpdate(
+    {
+      classId: classObjectId,
+      section,
+    },
+    {
+      $pull: { supervisors: { teacherId: new mongoose.Types.ObjectId(teacherId) } },
+    },
+    { new: true }
+  );
+
+  return updated;
+};
+
+const removeManySupervisors = async (payload: {
+  classId: string;
+  section: string;
+  teacherIds?: string[];
+}) => {
+
+  const { classId, section, teacherIds } = payload;
+
+  // If no teacherIds → do nothing
+  if (!teacherIds || teacherIds.length === 0) {
+    return { deletedCount: 0, message: "No teacherIds provided" };
+  }
+
+  const deleteResult = await ClassSectionSupervisor.deleteMany({
+    classId: new mongoose.Types.ObjectId(classId),
+    section: section.toUpperCase(),
+    teacherId: { 
+      $in: teacherIds.map(id => new mongoose.Types.ObjectId(id)) 
+    }
+  });
+
+  return deleteResult;
 };
 
 const getMySupervisorsClasses = async (teacherId: string) => {
@@ -103,5 +205,8 @@ const getMySupervisorsClasses = async (teacherId: string) => {
 
 export const ClassSectionSupervisorService = { 
     addOrUpdateSupervisor,
-    getMySupervisorsClasses
+    removeSupervisor,
+    getMySupervisorsClasses,
+    addMultipleSupervisors,
+    removeManySupervisors
 };

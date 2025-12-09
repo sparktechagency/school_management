@@ -48,6 +48,12 @@ router
     StudentController.summonStudent
   )
 
+    .patch(
+    "/summoned/remove/:studentId",
+    auth(USER_ROLE.admin, USER_ROLE.supperAdmin, USER_ROLE.school, USER_ROLE.teacher),
+    StudentController.removeSummoned
+  )
+
   .get(
     '/student_list',
     auth(USER_ROLE.admin, USER_ROLE.supperAdmin, USER_ROLE.school),
