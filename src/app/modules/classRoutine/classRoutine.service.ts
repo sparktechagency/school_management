@@ -410,7 +410,7 @@ const addOrUpdateManySubjectsInRoutine = async (payload: ManyRoutinePayload) => 
           classId,
           className,
           section,
-          supervisors: superVisors,
+          superVisors: superVisors,
         },
         session
       );
